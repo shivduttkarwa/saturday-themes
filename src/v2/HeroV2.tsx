@@ -5,6 +5,7 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { createFlyMedia } from './flyMedia'
+import { createHeroInk } from './heroInk'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -27,6 +28,8 @@ function W({ children }: { children: ReactNode }) {
 
 export default function HeroV2({ ready }: { ready: boolean }) {
   const wrap = useRef<HTMLDivElement>(null)
+  const hero = useRef<HTMLElement>(null)
+  const inkCanvas = useRef<HTMLCanvasElement>(null)
   const slot = useRef<HTMLSpanElement>(null)
   const slotVid = useRef<HTMLVideoElement>(null)
   const reel = useRef<HTMLElement>(null)
@@ -138,6 +141,46 @@ export default function HeroV2({ ready }: { ready: boolean }) {
     }
   }, [])
 
+  /* ---- cursor ink-reveal: fluid mask exposes the video beneath the paper ---- */
+  useEffect(() => {
+    const canvas = inkCanvas.current
+    const heroEl = hero.current
+    const video = vid.current
+    if (!canvas || !heroEl || !video) return
+
+    const ink = createHeroInk(canvas, video)
+    if (!ink) return
+
+    const onMove = (e: MouseEvent) => {
+      const r = heroEl.getBoundingClientRect()
+      const u = (e.clientX - r.left) / r.width
+      const v = 1 - (e.clientY - r.top) / r.height
+      ink.setMouse(u, v, true)
+    }
+    const onLeave = () => ink.setMouse(0.5, 0.5, false)
+    heroEl.addEventListener('mousemove', onMove)
+    heroEl.addEventListener('mouseleave', onLeave)
+
+    const ro = new ResizeObserver(() => ink.resize())
+    ro.observe(canvas)
+
+    const tick = (time: number) => {
+      // idle when the hero has scrolled away
+      const r = heroEl.getBoundingClientRect()
+      if (r.bottom < 0 || r.top > window.innerHeight) return
+      ink.step(time)
+    }
+    gsap.ticker.add(tick)
+
+    return () => {
+      gsap.ticker.remove(tick)
+      ro.disconnect()
+      heroEl.removeEventListener('mousemove', onMove)
+      heroEl.removeEventListener('mouseleave', onLeave)
+      ink.destroy()
+    }
+  }, [])
+
   /* ---- statement fades up as the panel locks in ---- */
   useGSAP(
     () => {
@@ -223,7 +266,8 @@ export default function HeroV2({ ready }: { ready: boolean }) {
 
   return (
     <div className="g-heroWrap" id="top" ref={wrap}>
-      <section className="g-hero">
+      <section className="g-hero" ref={hero}>
+        <canvas className="g-heroFx" ref={inkCanvas} aria-hidden="true" />
         <div className="g-meta-row">
           <span className="g-label">Saturday Themes®</span>
           <span className="g-label">Premium web studio</span>
