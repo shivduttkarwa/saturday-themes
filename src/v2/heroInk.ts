@@ -35,6 +35,8 @@ uniform vec2 uM0;        // stroke start (uv)
 uniform vec2 uM1;        // stroke end (uv)
 uniform float uStrength; // 0..1
 uniform float uRadius;   // uv-squared falloff
+uniform vec2 uDropPos;   // satellite droplet
+uniform vec2 uDropParams;// radius, strength
 uniform float uAspect;
 uniform float uTime;
 varying vec2 vUv;
@@ -54,14 +56,17 @@ float sdSegment(vec2 p, vec2 a, vec2 b) {
   return length(pa - ba * h);
 }
 void main() {
-  // the existing ink slowly swirls and dissipates
-  vec2 flow = curl(vUv * 3.0 + uTime * 0.08) * 0.0016;
-  float prev = texture2D(uPrev, vUv - flow).r;
-  prev *= 0.962;
+  // barely-there drift — drops quiver, they don't smear
+  vec2 flow = curl(vUv * 2.2 + uTime * 0.05) * 0.0008;
+  float prev = texture2D(uPrev, vUv - flow).r * 0.972;
 
   vec2 asp = vec2(uAspect, 1.0);
   float d = sdSegment(vUv * asp, uM0 * asp, uM1 * asp);
   float splat = exp(-(d * d) / uRadius) * uStrength;
+
+  // satellite droplet flicked off the stroke
+  vec2 dd = (vUv - uDropPos) * asp;
+  splat += exp(-dot(dd, dd) / uDropParams.x) * uDropParams.y;
 
   gl_FragColor = vec4(clamp(prev + splat, 0.0, 1.0), 0.0, 0.0, 1.0);
 }
@@ -72,6 +77,7 @@ precision highp float;
 uniform sampler2D uTrail;
 uniform sampler2D uTex;   // video
 uniform vec2 uUvScale;    // cover-fit crop
+uniform vec2 uTexel;      // 1 / trail resolution
 uniform float uAspect;
 uniform float uTime;
 varying vec2 vUv;
@@ -86,20 +92,36 @@ float fbm(vec2 p) {
 void main() {
   float m = texture2D(uTrail, vUv).r;
 
-  // ragged, living ink edge
-  float n = fbm(vUv * vec2(uAspect, 1.0) * 6.0 + uTime * 0.12);
-  float mm = m + (n - 0.5) * 0.30 * smoothstep(0.0, 0.55, m);
+  // surface normal of the water from the field gradient
+  float ml = texture2D(uTrail, vUv - vec2(uTexel.x * 1.5, 0.0)).r;
+  float mr = texture2D(uTrail, vUv + vec2(uTexel.x * 1.5, 0.0)).r;
+  float mb = texture2D(uTrail, vUv - vec2(0.0, uTexel.y * 1.5)).r;
+  float mt = texture2D(uTrail, vUv + vec2(0.0, uTexel.y * 1.5)).r;
+  vec2 nrm = vec2(mr - ml, mt - mb);
 
-  float outer = smoothstep(0.16, 0.34, mm);  // full blob (ink)
-  float inner = smoothstep(0.44, 0.66, mm);  // video window inside
+  // the merest imperfection — drops stay round, never mechanical
+  float n = fbm(vUv * vec2(uAspect, 1.0) * 2.2 + uTime * 0.05);
+  float mm = m + (n - 0.5) * 0.07;
 
+  // crisp meniscus: tight threshold on a smooth field = metaball droplets
+  float a = smoothstep(0.40, 0.50, mm);
+
+  // droplet lens: the video bulges through the drop like light through water
   vec2 vuv = 0.5 + (vUv - 0.5) * uUvScale;
   vuv.y = 1.0 - vuv.y;
-  vec3 video = texture2D(uTex, vuv).rgb;
-  vec3 ink = vec3(0.059, 0.055, 0.047);
+  vuv -= nrm * vec2(0.22, -0.22);
 
-  vec3 col = mix(ink, video, inner);
-  gl_FragColor = vec4(col * outer, outer);
+  vec3 video = texture2D(uTex, vuv).rgb;
+
+  // gentle grade so the reveal reads rich against the paper
+  float g = dot(video, vec3(0.299, 0.587, 0.114));
+  video = mix(vec3(g), video, 1.12) * 0.99;
+
+  // glassy highlight along the upper meniscus
+  float spec = clamp(-nrm.y * 2.6 - nrm.x * 1.2, 0.0, 1.0);
+  video += vec3(pow(spec, 2.2) * 0.28);
+
+  gl_FragColor = vec4(video * a, a);
 }
 `
 
@@ -214,6 +236,7 @@ export function createHeroInk(canvas: HTMLCanvasElement, source: HTMLVideoElemen
   let strength = 0
   let radius = 0.0004
   let hasPointer = false
+  const drops: { x: number; y: number; r: number; s: number }[] = []
 
   const setMouse = (u: number, v: number, entered: boolean) => {
     if (!entered || !hasPointer) {
@@ -224,9 +247,20 @@ export function createHeroInk(canvas: HTMLCanvasElement, source: HTMLVideoElemen
     }
     const speed = Math.hypot(u - m1.x, v - m1.y)
     m1 = { x: u, y: v }
-    // faster strokes: stronger and wider
-    strength = Math.min(1, 0.35 + speed * 22)
-    radius = 0.00035 + Math.min(0.0022, speed * 0.02)
+    strength = Math.min(1, 0.55 + speed * 25)
+    radius = 0.001 + Math.min(0.004, speed * 0.04)
+
+    // fast strokes flick off small satellite droplets
+    if (speed > 0.008 && Math.random() < 0.3 && drops.length < 8) {
+      const ang = Math.random() * Math.PI * 2
+      const dist = 0.02 + Math.random() * 0.05
+      drops.push({
+        x: u + Math.cos(ang) * dist,
+        y: v + Math.sin(ang) * dist,
+        r: 0.00006 + Math.random() * 0.00025,
+        s: 0.5 + Math.random() * 0.5,
+      })
+    }
   }
 
   let flip = 0
@@ -250,11 +284,14 @@ export function createHeroInk(canvas: HTMLCanvasElement, source: HTMLVideoElemen
     gl.uniform1f(gl.getUniformLocation(trailProg, 'uRadius'), radius)
     gl.uniform1f(gl.getUniformLocation(trailProg, 'uAspect'), trailW / trailH)
     gl.uniform1f(gl.getUniformLocation(trailProg, 'uTime'), time)
+    const drop = drops.shift()
+    gl.uniform2f(gl.getUniformLocation(trailProg, 'uDropPos'), drop?.x ?? 0, drop?.y ?? 0)
+    gl.uniform2f(gl.getUniformLocation(trailProg, 'uDropParams'), drop?.r ?? 1, drop?.s ?? 0)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
     // stroke consumed — next segment starts here; strength eases off
     m0 = { ...m1 }
-    strength *= 0.55
+    strength *= 0.8
 
     // --- composite to screen ---
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
@@ -282,6 +319,7 @@ export function createHeroInk(canvas: HTMLCanvasElement, source: HTMLVideoElemen
     const uvScale: [number, number] =
       rectAspect > srcAspect ? [1, srcAspect / rectAspect] : [rectAspect / srcAspect, 1]
     gl.uniform2f(gl.getUniformLocation(compProg, 'uUvScale'), uvScale[0], uvScale[1])
+    gl.uniform2f(gl.getUniformLocation(compProg, 'uTexel'), 1 / trailW, 1 / trailH)
     gl.uniform1f(gl.getUniformLocation(compProg, 'uAspect'), rectAspect)
     gl.uniform1f(gl.getUniformLocation(compProg, 'uTime'), time)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
