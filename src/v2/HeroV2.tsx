@@ -67,6 +67,7 @@ export default function HeroV2({ ready }: { ready: boolean }) {
 
     const easePos = gsap.parseEase('power2.inOut')
     let p = 0
+    let landed = false
 
     const tick = (time: number) => {
       if (!wrap.current || !slot.current || !reel.current) return
@@ -74,11 +75,13 @@ export default function HeroV2({ ready }: { ready: boolean }) {
       p += (target - p) * 0.14
       if (Math.abs(target - p) < 0.001) p = target
 
-      // hand off to the static full-bleed panel once landed
-      const done = p > 0.992
-      canvas.style.opacity = done ? '0' : '1'
-      if (fix.current) fix.current.style.opacity = done ? '1' : '0'
-      if (done) return
+      // hand off to the static full-bleed panel once landed — hysteresis so
+      // the swap can't flap at the boundary, no crossfade so it can't flicker
+      if (!landed && p > 0.996) landed = true
+      else if (landed && p < 0.988) landed = false
+      canvas.style.opacity = landed ? '0' : '1'
+      if (fix.current) fix.current.style.opacity = landed ? '1' : '0'
+      if (landed) return
 
       const wr = wrap.current.getBoundingClientRect()
       if (wr.bottom < -100 || wr.top > window.innerHeight + 100) {
@@ -105,12 +108,19 @@ export default function HeroV2({ ready }: { ready: boolean }) {
       // idle float while parked in the sentence
       y += Math.sin(time * 1.9) * h * 0.05 * (1 - p)
 
-      // the cloth wave — silent at rest, wild mid-flight, flat on landing
-      const amp = Math.sin(Math.PI * p) * Math.min(150, 30 + h * 0.28) + (1 - p) * 1.5
+      // the cloth wave — silent at rest, wild mid-flight, fully settled
+      // before the handoff so the final frame matches the static panel
+      const arc = Math.sin(Math.PI * p)
+      const settle = Math.min(1, (1 - p) * 14)
+      const amp = (arc * Math.min(150, 30 + h * 0.28) + (1 - p) * 1.5) * settle
+
+      // banking: rolls into the flight, wobbles with the wind, levels out
+      const rot = arc * -0.22 + Math.sin(time * 1.4) * 0.03 * arc
+
       const radius = (Math.min(w, h) / 2) * (1 - pe)
       const shade = Math.min(Math.max((p - 0.6) / 0.4, 0), 1) * 0.45
 
-      fly.draw({ x, y, w, h, amp, time, radius, shade })
+      fly.draw({ x, y, w, h, amp, time, radius, shade, rot })
     }
 
     gsap.ticker.add(tick)

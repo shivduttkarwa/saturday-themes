@@ -367,7 +367,6 @@ body.v2 .grain {
   inset: 0;
   overflow: clip;
   opacity: 0;
-  transition: opacity 0.25s ease;
 }
 
 .g-reelfix img {

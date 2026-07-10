@@ -12,6 +12,7 @@ uniform vec4 uRect;      // x, y, w, h in css px (viewport space)
 uniform vec2 uViewport;  // css px
 uniform float uAmp;      // px
 uniform float uTime;     // seconds
+uniform float uRot;      // radians, banks the whole sheet around its center
 varying vec2 vUv;
 void main() {
   vUv = aPos;
@@ -21,6 +22,11 @@ void main() {
   float env = 0.7 + 0.3 * sin(aPos.y * 3.14159);
   px.y += (w1 * 0.65 + w2 * 0.35) * uAmp * env;
   px.x += sin(aPos.y * 3.14159 + uTime * 1.1) * uAmp * 0.3;
+  vec2 c = uRect.xy + uRect.zw * 0.5;
+  float cs = cos(uRot);
+  float sn = sin(uRot);
+  vec2 rel = px - c;
+  px = c + vec2(rel.x * cs - rel.y * sn, rel.x * sn + rel.y * cs);
   vec2 clip = (px / uViewport) * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
 }
@@ -58,6 +64,7 @@ export interface FlyDrawOpts {
   time: number
   radius: number
   shade: number
+  rot: number
 }
 
 export interface FlyMedia {
@@ -126,6 +133,7 @@ export function createFlyMedia(canvas: HTMLCanvasElement, src: string): FlyMedia
   const uViewport = gl.getUniformLocation(prog, 'uViewport')
   const uAmp = gl.getUniformLocation(prog, 'uAmp')
   const uTime = gl.getUniformLocation(prog, 'uTime')
+  const uRot = gl.getUniformLocation(prog, 'uRot')
   const uRadius = gl.getUniformLocation(prog, 'uRadius')
   const uShade = gl.getUniformLocation(prog, 'uShade')
   const uUvScale = gl.getUniformLocation(prog, 'uUvScale')
@@ -177,6 +185,7 @@ export function createFlyMedia(canvas: HTMLCanvasElement, src: string): FlyMedia
     gl.uniform2f(uViewport, window.innerWidth, window.innerHeight)
     gl.uniform1f(uAmp, o.amp)
     gl.uniform1f(uTime, o.time)
+    gl.uniform1f(uRot, o.rot)
     gl.uniform1f(uRadius, Math.max(0, Math.min(o.radius, Math.min(o.w, o.h) / 2)))
     gl.uniform1f(uShade, o.shade)
     gl.uniform2f(uUvScale, uvScale[0], uvScale[1])
