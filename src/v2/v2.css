@@ -320,6 +320,21 @@ body.v2 .grain {
   padding: 0 clamp(1.25rem, 6vw, 6rem);
   color: #f4f1ea;
   opacity: 0;
+  /* soft vignette behind the text only — the video itself never dims */
+  text-shadow: 0 1px 3px rgba(8, 7, 6, 0.5), 0 4px 32px rgba(8, 7, 6, 0.55);
+}
+
+.g-reel-statement::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(90vw, 60rem);
+  height: 60%;
+  background: radial-gradient(ellipse closest-side, rgba(8, 7, 6, 0.38), transparent 75%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .g-reel-statement h2 {
@@ -369,16 +384,11 @@ body.v2 .grain {
   opacity: 0;
 }
 
-.g-reelfix img {
+.g-reelfix img,
+.g-reelfix video {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.g-reelshade {
-  position: absolute;
-  inset: 0;
-  background: rgba(8, 7, 6, 0.45);
 }
 
 /* ============================================================

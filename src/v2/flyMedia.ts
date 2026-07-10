@@ -37,7 +37,6 @@ precision highp float;
 uniform sampler2D uTex;
 uniform vec4 uRect;
 uniform float uRadius;   // px
-uniform float uShade;    // 0..1 darken
 uniform vec2 uUvScale;   // cover-fit crop
 varying vec2 vUv;
 void main() {
@@ -47,7 +46,6 @@ void main() {
   vec2 q = abs((vUv - 0.5) * uRect.zw) - (halfSize - vec2(uRadius));
   float d = length(max(q, 0.0)) - uRadius;
   float a = 1.0 - smoothstep(-1.0, 1.0, d);
-  col *= (1.0 - uShade);
   gl_FragColor = vec4(col * a, a);
 }
 `
@@ -63,7 +61,6 @@ export interface FlyDrawOpts {
   amp: number
   time: number
   radius: number
-  shade: number
   rot: number
 }
 
@@ -72,7 +69,7 @@ export interface FlyMedia {
   destroy: () => void
 }
 
-export function createFlyMedia(canvas: HTMLCanvasElement, src: string): FlyMedia | null {
+export function createFlyMedia(canvas: HTMLCanvasElement, source: HTMLVideoElement): FlyMedia | null {
   const gl = canvas.getContext('webgl', {
     alpha: true,
     antialias: true,
@@ -135,7 +132,6 @@ export function createFlyMedia(canvas: HTMLCanvasElement, src: string): FlyMedia
   const uTime = gl.getUniformLocation(prog, 'uTime')
   const uRot = gl.getUniformLocation(prog, 'uRot')
   const uRadius = gl.getUniformLocation(prog, 'uRadius')
-  const uShade = gl.getUniformLocation(prog, 'uShade')
   const uUvScale = gl.getUniformLocation(prog, 'uUvScale')
 
   gl.enable(gl.BLEND)
@@ -149,19 +145,13 @@ export function createFlyMedia(canvas: HTMLCanvasElement, src: string): FlyMedia
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 
-  let imgAspect = 16 / 9
+  let srcAspect = 16 / 9
   let texLoaded = false
-  let destroyed = false
-  const img = new Image()
-  img.crossOrigin = 'anonymous'
-  img.onload = () => {
-    if (destroyed) return
-    imgAspect = img.naturalWidth / img.naturalHeight
-    gl.bindTexture(gl.TEXTURE_2D, tex)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img)
-    texLoaded = true
+  const updateAspect = () => {
+    if (source.videoWidth) srcAspect = source.videoWidth / source.videoHeight
   }
-  img.src = src
+  source.addEventListener('loadedmetadata', updateAspect)
+  updateAspect()
 
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
   const resize = () => {
@@ -175,11 +165,19 @@ export function createFlyMedia(canvas: HTMLCanvasElement, src: string): FlyMedia
   const draw = (o: FlyDrawOpts) => {
     gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
+
+    // pull the current video frame into the texture
+    if (source.readyState >= 2) {
+      updateAspect()
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
+      texLoaded = true
+    }
     if (!texLoaded) return
 
     const rectAspect = o.w / Math.max(o.h, 1)
     const uvScale: [number, number] =
-      rectAspect > imgAspect ? [1, imgAspect / rectAspect] : [rectAspect / imgAspect, 1]
+      rectAspect > srcAspect ? [1, srcAspect / rectAspect] : [rectAspect / srcAspect, 1]
 
     gl.uniform4f(uRect, o.x, o.y, o.w, o.h)
     gl.uniform2f(uViewport, window.innerWidth, window.innerHeight)
@@ -187,14 +185,13 @@ export function createFlyMedia(canvas: HTMLCanvasElement, src: string): FlyMedia
     gl.uniform1f(uTime, o.time)
     gl.uniform1f(uRot, o.rot)
     gl.uniform1f(uRadius, Math.max(0, Math.min(o.radius, Math.min(o.w, o.h) / 2)))
-    gl.uniform1f(uShade, o.shade)
     gl.uniform2f(uUvScale, uvScale[0], uvScale[1])
 
     gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0)
   }
 
   const destroy = () => {
-    destroyed = true
+    source.removeEventListener('loadedmetadata', updateAspect)
     window.removeEventListener('resize', resize)
     gl.deleteBuffer(vbo)
     gl.deleteBuffer(ibo)

@@ -14,8 +14,7 @@ const PILLS = [
   'https://images.unsplash.com/photo-1561070791-2526d30994b5?q=80&w=400&auto=format&fit=crop',
 ]
 
-const REEL_IMG =
-  'https://images.unsplash.com/photo-1557672172-298e090bd0f1?q=80&w=2400&auto=format&fit=crop'
+const REEL_VIDEO = '/vids/pill_video.mp4'
 
 /* masked word — slides up out of its own clip on entrance */
 function W({ children }: { children: ReactNode }) {
@@ -29,31 +28,38 @@ function W({ children }: { children: ReactNode }) {
 export default function HeroV2({ ready }: { ready: boolean }) {
   const wrap = useRef<HTMLDivElement>(null)
   const slot = useRef<HTMLSpanElement>(null)
-  const slotImg = useRef<HTMLImageElement>(null)
+  const slotVid = useRef<HTMLVideoElement>(null)
   const reel = useRef<HTMLElement>(null)
   const fix = useRef<HTMLDivElement>(null)
+  const vid = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const intro = useRef({ s: 1 })
 
   /* ---- the liquid flight: WebGL cloth plane morphs from slot to full-bleed ---- */
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !wrap.current) return
+    const video = vid.current
+    if (!canvas || !video || !wrap.current) return
+
+    video.play().catch(() => {})
 
     const showStatic = () => {
       canvas.style.opacity = '0'
       if (fix.current) fix.current.style.opacity = '1'
     }
 
-    const fly = createFlyMedia(canvas, REEL_IMG)
+    const fly = createFlyMedia(canvas, video)
     if (!fly) {
-      // no WebGL — the pill stays as a plain image in the headline
+      // no WebGL — a plain video pill stays in the headline
       showStatic()
       return
     }
-    // GL owns the pill now; hide the in-text fallback image
-    const slotImgEl = slotImg.current
-    if (slotImgEl) slotImgEl.style.visibility = 'hidden'
+    // GL owns the pill now; hide + rest the in-text fallback video
+    const slotVidEl = slotVid.current
+    if (slotVidEl) {
+      slotVidEl.style.visibility = 'hidden'
+      slotVidEl.pause()
+    }
 
     let target = 0
     const st = ScrollTrigger.create({
@@ -118,9 +124,8 @@ export default function HeroV2({ ready }: { ready: boolean }) {
       const rot = arc * -0.22 + Math.sin(time * 1.4) * 0.03 * arc
 
       const radius = (Math.min(w, h) / 2) * (1 - pe)
-      const shade = Math.min(Math.max((p - 0.6) / 0.4, 0), 1) * 0.45
 
-      fly.draw({ x, y, w, h, amp, time, radius, shade, rot })
+      fly.draw({ x, y, w, h, amp, time, radius, rot })
     }
 
     gsap.ticker.add(tick)
@@ -129,7 +134,7 @@ export default function HeroV2({ ready }: { ready: boolean }) {
       gsap.ticker.remove(tick)
       st.kill()
       fly.destroy()
-      if (slotImgEl) slotImgEl.style.visibility = ''
+      if (slotVidEl) slotVidEl.style.visibility = ''
     }
   }, [])
 
@@ -275,7 +280,15 @@ export default function HeroV2({ ready }: { ready: boolean }) {
           <span className="g-hline">
             <W>people</W>
             <span className="g-reelslot" ref={slot} aria-hidden="true">
-              <img className="g-slotimg" src={REEL_IMG} alt="" ref={slotImg} />
+              <video
+                className="g-slotimg"
+                src={REEL_VIDEO}
+                muted
+                loop
+                autoPlay
+                playsInline
+                ref={slotVid}
+              />
             </span>
             <W>remember</W>
           </span>
@@ -293,8 +306,9 @@ export default function HeroV2({ ready }: { ready: boolean }) {
       {/* the flying plane lands here as a full-bleed panel */}
       <section className="g-reel" ref={reel}>
         <div className="g-reelfix" ref={fix}>
-          <img src={REEL_IMG} alt="" />
-          <div className="g-reelshade" />
+          {/* this same element feeds the WebGL texture — one continuous
+              stream, so the landing handoff is frame-exact */}
+          <video src={REEL_VIDEO} muted loop autoPlay playsInline ref={vid} />
         </div>
         <div className="g-reel-statement">
           <h2>We build websites that feel like films.</h2>
