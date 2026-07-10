@@ -73,12 +73,11 @@ export default function Cases() {
           }
         )
 
-        // recede + darken while the next case covers this one
+        // recede slightly while the next case covers this one — no darkening
         const next = cases[i + 1]
         if (next) {
           gsap.to(c.querySelector('.g-case-inner'), {
-            scale: 0.92,
-            filter: 'brightness(0.35)',
+            scale: 0.95,
             ease: 'none',
             scrollTrigger: { trigger: next, start: 'top bottom', end: 'top top', scrub: true },
           })
