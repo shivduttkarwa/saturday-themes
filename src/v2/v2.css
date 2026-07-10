@@ -175,13 +175,17 @@ body.v2 .grain {
 }
 
 /* ============================================================
-   HERO — image window expands to swallow the viewport
+   HERO — inline media pills; one pill flies out, rotating,
+   and lands as the full-bleed reel panel below
    ============================================================ */
+
+.g-heroWrap {
+  position: relative;
+}
 
 .g-hero {
   position: relative;
-  height: 100svh;
-  overflow: clip;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -195,52 +199,88 @@ body.v2 .grain {
   flex-wrap: wrap;
 }
 
-.g-h1 {
+.g-h2 {
   font-family: var(--f-display);
-  font-weight: 800;
-  font-size: clamp(3.2rem, 13.8vw, 15rem);
-  line-height: 0.94;
-  letter-spacing: -0.04em;
-  text-transform: uppercase;
+  font-weight: 700;
+  font-size: clamp(2.5rem, 8.6vw, 9.5rem);
+  line-height: 1.06;
+  letter-spacing: -0.045em;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 0;
 }
 
-.g-l {
-  display: block;
+.g-hline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.26em;
+  flex-wrap: wrap;
+}
+
+.g-wmask {
+  display: inline-block;
   overflow: clip;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
 }
 
-.g-l > .g-lin {
+.g-w {
   display: inline-block;
   will-change: transform;
 }
 
-.g-l2 {
-  padding-left: clamp(1rem, 7vw, 8rem);
+/* small avatar strip inside the first line */
+
+.g-pillstrip {
+  display: inline-flex;
+  gap: 0.05em;
+  border-radius: 0.45em;
+  overflow: clip;
+  vertical-align: middle;
 }
 
-.g-l3 {
-  align-self: flex-end;
-  text-align: right;
-}
-
-.g-l3 em {
-  font-family: var(--f-serif);
-  font-style: italic;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: -0.02em;
-}
-
-.g-frame {
+.g-pill {
   display: inline-block;
-  width: 1.55em;
-  height: 0.66em;
-  margin-right: 0.08em;
-  vertical-align: -0.03em;
-  border-radius: 200px;
-  background: rgba(15, 14, 12, 0.06);
+  width: 0.82em;
+  height: 0.68em;
+  overflow: clip;
+  border-radius: 0.16em;
+  will-change: transform;
+}
+
+.g-pillstrip .g-pill:first-child {
+  border-radius: 0.45em 0.16em 0.16em 0.45em;
+}
+
+.g-pillstrip .g-pill:last-child {
+  border-radius: 0.16em 0.45em 0.45em 0.16em;
+}
+
+.g-pill img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* hand-drawn arrow */
+
+.g-arrow {
+  width: 1.5em;
+  height: 0.62em;
+  flex: 0 0 auto;
+  color: var(--v2-accent);
+  transform: rotate(-4deg);
+}
+
+/* empty slot in line three — the flying media parks exactly here */
+
+.g-reelslot {
+  display: inline-block;
+  width: 2.05em;
+  height: 0.68em;
 }
 
 .g-hero-bottom {
@@ -257,33 +297,20 @@ body.v2 .grain {
   color: var(--ink-soft);
 }
 
-/* the takeover layer that zooms out of the type window */
+/* landing section for the morph */
 
-.g-takeover {
-  position: absolute;
-  inset: 0;
+.g-reel {
+  position: relative;
+  height: 110svh;
   z-index: 5;
-  clip-path: inset(44% 42% 44% 38% round 200px);
-  will-change: clip-path;
 }
 
-.g-takeover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  will-change: transform;
-}
-
-.g-shade {
+.g-reel-statement {
   position: absolute;
-  inset: 0;
-  background: rgba(10, 9, 8, 0.5);
-  opacity: 0;
-}
-
-.g-statement {
-  position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -295,7 +322,7 @@ body.v2 .grain {
   opacity: 0;
 }
 
-.g-statement h2 {
+.g-reel-statement h2 {
   font-family: var(--f-serif);
   font-style: italic;
   font-weight: 400;
@@ -304,12 +331,55 @@ body.v2 .grain {
   max-width: 22ch;
 }
 
-.g-statement p {
+.g-reel-statement p {
   font-family: var(--f-mono);
   font-size: 0.7rem;
   letter-spacing: 0.3em;
   text-transform: uppercase;
   opacity: 0.75;
+}
+
+/* fixed viewport canvas — the WebGL cloth plane flies on this layer */
+
+.g-flycanvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* fallback pill inside the headline (visible when WebGL is unavailable) */
+
+.g-slotimg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 999px;
+}
+
+/* static full-bleed panel the plane hands off to on landing */
+
+.g-reelfix {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.g-reelfix img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.g-reelshade {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 7, 6, 0.45);
 }
 
 /* ============================================================
@@ -826,8 +896,12 @@ body.v2 .grain {
     display: none;
   }
 
-  .g-takeover {
-    clip-path: inset(46% 30% 46% 25% round 200px);
+  .g-h2 {
+    font-size: clamp(2.2rem, 11vw, 4.5rem);
+  }
+
+  .g-reel {
+    height: 100svh;
   }
 
   .g-services {

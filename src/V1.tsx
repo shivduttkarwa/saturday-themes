@@ -27,7 +27,6 @@ gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollSmoother, SplitText)
  */
 function SmoothScroll({ ready }: { ready: boolean }) {
   useLayoutEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const smoother = ScrollSmoother.create({ smooth: 1.2, effects: true })
     smoother.paused(true) // locked while the preloader plays
     return () => smoother.kill()
