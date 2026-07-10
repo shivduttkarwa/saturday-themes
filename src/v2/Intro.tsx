@@ -63,13 +63,15 @@ export default function Intro() {
         tl.from(
           s,
           {
-            y: () => -window.innerHeight * gsap.utils.random(0.75, 1.15),
+            // they land at the very bottom, so the drop must exceed a full
+            // viewport for reverse-scroll to carry them fully off-screen
+            y: () => -window.innerHeight * gsap.utils.random(1.2, 1.6),
             x: () => dir * gsap.utils.random(80, 340),
             rotation: () => dir * gsap.utils.random(70, 220),
-            duration: 0.55,
+            duration: 1.0,
             ease: 'bounce.out',
           },
-          1.15 + i * 0.09
+          1.0 + i * 0.09
         )
       })
 
