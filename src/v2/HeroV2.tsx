@@ -141,14 +141,13 @@ export default function HeroV2({ ready }: { ready: boolean }) {
     }
   }, [])
 
-  /* ---- cursor ink-reveal: fluid mask exposes the video beneath the paper ---- */
+  /* ---- cursor water-reveal: difference-blended drops invert the hero ---- */
   useEffect(() => {
     const canvas = inkCanvas.current
     const heroEl = hero.current
-    const video = vid.current
-    if (!canvas || !heroEl || !video) return
+    if (!canvas || !heroEl) return
 
-    const ink = createHeroInk(canvas, video)
+    const ink = createHeroInk(canvas)
     if (!ink) return
 
     const onMove = (e: MouseEvent) => {

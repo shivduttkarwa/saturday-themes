@@ -39,6 +39,12 @@ body.v2 .grain {
   opacity: 0.04;
 }
 
+/* the smooth-scroll container is its own stacking context — it needs an
+   explicit paper background so difference blending sees it as backdrop */
+body.v2 #smooth-content {
+  background: var(--paper);
+}
+
 /* ---------- shared v2 ---------- */
 
 .g-label {
@@ -192,15 +198,17 @@ body.v2 .grain {
   padding: 5.5rem clamp(1.25rem, 4vw, 4rem) 1.8rem;
 }
 
-/* ink-reveal canvas sits between the paper and the headline */
+/* water-reveal canvas rides ABOVE the headline; difference blending
+   inverts everything beneath the drops — paper goes black, type goes light */
 
 .g-heroFx {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  z-index: 0;
+  z-index: 2;
   pointer-events: none;
+  mix-blend-mode: difference;
 }
 
 .g-hero > :not(.g-heroFx) {

@@ -75,9 +75,8 @@ void main() {
 const COMPOSITE_FRAG = `
 precision highp float;
 uniform sampler2D uTrail;
-uniform sampler2D uTex;   // video
-uniform vec2 uUvScale;    // cover-fit crop
 uniform vec2 uTexel;      // 1 / trail resolution
+uniform vec3 uPaper;      // page background color
 uniform float uAspect;
 uniform float uTime;
 varying vec2 vUv;
@@ -106,22 +105,13 @@ void main() {
   // crisp meniscus: tight threshold on a smooth field = metaball droplets
   float a = smoothstep(0.40, 0.50, mm);
 
-  // droplet lens: the video bulges through the drop like light through water
-  vec2 vuv = 0.5 + (vUv - 0.5) * uUvScale;
-  vuv.y = 1.0 - vuv.y;
-  vuv -= nrm * vec2(0.22, -0.22);
-
-  vec3 video = texture2D(uTex, vuv).rgb;
-
-  // gentle grade so the reveal reads rich against the paper
-  float g = dot(video, vec3(0.299, 0.587, 0.114));
-  video = mix(vec3(g), video, 1.12) * 0.99;
-
-  // glassy highlight along the upper meniscus
+  // paper-colored water + difference blending (CSS) inverts whatever sits
+  // beneath: paper turns black, the dark headline turns light.
+  // the glassy meniscus highlight reads as a soft rim inside the pool.
   float spec = clamp(-nrm.y * 2.6 - nrm.x * 1.2, 0.0, 1.0);
-  video += vec3(pow(spec, 2.2) * 0.28);
+  vec3 col = uPaper * (1.0 - pow(spec, 2.0) * 0.22);
 
-  gl_FragColor = vec4(video * a, a);
+  gl_FragColor = vec4(col * a, a);
 }
 `
 
@@ -135,7 +125,7 @@ export interface HeroInk {
   destroy: () => void
 }
 
-export function createHeroInk(canvas: HTMLCanvasElement, source: HTMLVideoElement): HeroInk | null {
+export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
   const gl = canvas.getContext('webgl', {
     alpha: true,
     antialias: false,
@@ -212,15 +202,6 @@ export function createHeroInk(canvas: HTMLCanvasElement, source: HTMLVideoElemen
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
-
-  // video texture
-  const videoTex = makeTex(2, 2)
-  let srcAspect = 16 / 9
-  const updateAspect = () => {
-    if (source.videoWidth) srcAspect = source.videoWidth / source.videoHeight
-  }
-  source.addEventListener('loadedmetadata', updateAspect)
-  updateAspect()
 
   const dpr = Math.min(window.devicePixelRatio || 1, 1.25)
   const resize = () => {
@@ -307,32 +288,19 @@ export function createHeroInk(canvas: HTMLCanvasElement, source: HTMLVideoElemen
     gl.bindTexture(gl.TEXTURE_2D, dst.tex)
     gl.uniform1i(gl.getUniformLocation(compProg, 'uTrail'), 0)
 
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_2D, videoTex)
-    if (source.readyState >= 2) {
-      updateAspect()
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
-    }
-    gl.uniform1i(gl.getUniformLocation(compProg, 'uTex'), 1)
-
     const rectAspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1)
-    const uvScale: [number, number] =
-      rectAspect > srcAspect ? [1, srcAspect / rectAspect] : [rectAspect / srcAspect, 1]
-    gl.uniform2f(gl.getUniformLocation(compProg, 'uUvScale'), uvScale[0], uvScale[1])
     gl.uniform2f(gl.getUniformLocation(compProg, 'uTexel'), 1 / trailW, 1 / trailH)
+    gl.uniform3f(gl.getUniformLocation(compProg, 'uPaper'), 0.949, 0.937, 0.914)
     gl.uniform1f(gl.getUniformLocation(compProg, 'uAspect'), rectAspect)
     gl.uniform1f(gl.getUniformLocation(compProg, 'uTime'), time)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-    gl.activeTexture(gl.TEXTURE0)
   }
 
   const destroy = () => {
-    source.removeEventListener('loadedmetadata', updateAspect)
     for (const f of fbos) {
       gl.deleteTexture(f.tex)
       gl.deleteFramebuffer(f.fb)
     }
-    gl.deleteTexture(videoTex)
     gl.deleteBuffer(vbo)
     gl.deleteProgram(trailProg)
     gl.deleteProgram(compProg)
