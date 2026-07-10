@@ -10,6 +10,7 @@ import Cursor from '../components/Cursor'
 import Loader from './Loader'
 import NavV2 from './NavV2'
 import HeroV2 from './HeroV2'
+import Intro from './Intro'
 import Ticker from './Ticker'
 import Cases from './Cases'
 import Services from './Services'
@@ -58,6 +59,7 @@ export default function V2() {
       <div id="smooth-wrapper">
         <div id="smooth-content">
           <HeroV2 ready={ready} />
+          <Intro />
           <Ticker />
           <Cases />
           <Services />

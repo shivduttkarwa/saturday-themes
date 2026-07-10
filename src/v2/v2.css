@@ -416,6 +416,151 @@ body.v2 #smooth-content {
 }
 
 /* ============================================================
+   INTRO — pinned statement with marker strike, scribble circle,
+   sticker slaps and scrub counters
+   ============================================================ */
+
+.g-intro {
+  position: relative;
+  overflow: clip;
+}
+
+.gi-pin {
+  position: relative;
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3rem;
+  padding: 6rem clamp(1.25rem, 5vw, 6rem) 4rem;
+}
+
+.gi-statement {
+  position: relative;
+  z-index: 1;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 4.6vw, 4.6rem);
+  line-height: 1.14;
+  letter-spacing: -0.03em;
+  max-width: 20ch;
+}
+
+.gi-line {
+  display: block;
+  overflow: clip;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.1em;
+}
+
+.gi-line-in {
+  display: inline-block;
+  will-change: transform;
+}
+
+.gi-struck {
+  position: relative;
+  display: inline-block;
+}
+
+.gi-strike {
+  position: absolute;
+  left: -3%;
+  right: -3%;
+  top: 52%;
+  height: 0.13em;
+  border-radius: 99px;
+  background: var(--v2-accent);
+  transform: scaleX(0) rotate(-2deg);
+  transform-origin: left center;
+}
+
+.gi-circled {
+  position: relative;
+  display: inline-block;
+}
+
+.gi-circle {
+  position: absolute;
+  inset: -18% -8%;
+  width: 116%;
+  height: 136%;
+  color: var(--v2-accent);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.gi-sticker {
+  position: absolute;
+  z-index: 2;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: clamp(1rem, 1.5vw, 1.4rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 1rem 1.8rem;
+  border-radius: 999px;
+  box-shadow: 0 16px 36px rgba(15, 14, 12, 0.22);
+  will-change: transform;
+}
+
+.gi-sticker.is-ink {
+  background: var(--ink);
+  color: var(--paper);
+  border: 2px solid var(--paper);
+  outline: 1.5px solid var(--ink);
+}
+
+.gi-sticker.is-blue {
+  background: var(--v2-accent);
+  color: #fff;
+  border: 2px solid #fff;
+  outline: 1.5px solid var(--v2-accent);
+}
+
+.gi-sticker.is-paper {
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px dashed var(--ink);
+}
+
+.gi-stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: clamp(2rem, 6vw, 6rem);
+  border-top: 1px solid var(--v2-line);
+  padding-top: 1.8rem;
+}
+
+.gi-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gi-stat-value {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: clamp(2.2rem, 4.6vw, 4.2rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.gi-suffix {
+  color: var(--v2-accent);
+}
+
+.gi-stat-label {
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ============================================================
    TICKER
    ============================================================ */
 
@@ -935,6 +1080,19 @@ body.v2 #smooth-content {
 
   .g-reel {
     height: 100svh;
+  }
+
+  .gi-sticker:nth-of-type(n + 4) {
+    display: none;
+  }
+
+  .gi-statement {
+    max-width: none;
+  }
+
+  .gi-stats {
+    flex-wrap: wrap;
+    gap: 1.5rem 2.5rem;
   }
 
   .g-services {
