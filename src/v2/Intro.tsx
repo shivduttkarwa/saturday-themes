@@ -6,12 +6,12 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 gsap.registerPlugin(ScrollTrigger)
 
 const STICKERS = [
-  { label: '✦ GSAP®', left: '5%', bottom: '31%', rot: -8, variant: 'blue' },
-  { label: '⚡ React', left: '19%', bottom: '27%', rot: 6, variant: 'ink' },
-  { label: '✳ Webflow', left: '35%', bottom: '30%', rot: -4, variant: 'paper' },
-  { label: '● Shopify', left: '51%', bottom: '27%', rot: 9, variant: 'ink' },
-  { label: '✺ Motion', left: '66%', bottom: '31%', rot: -10, variant: 'blue' },
-  { label: '◍ 3D / WebGL', left: '80%', bottom: '28%', rot: 5, variant: 'paper' },
+  { label: '✦ GSAP®', left: '5%', bottom: '4%', rot: -8, variant: 'blue' },
+  { label: '⚡ React', left: '19%', bottom: '2%', rot: 6, variant: 'ink' },
+  { label: '✳ Webflow', left: '35%', bottom: '5%', rot: -4, variant: 'paper' },
+  { label: '● Shopify', left: '51%', bottom: '2.5%', rot: 9, variant: 'ink' },
+  { label: '✺ Motion', left: '66%', bottom: '4.5%', rot: -10, variant: 'blue' },
+  { label: '◍ 3D / WebGL', left: '80%', bottom: '3%', rot: 5, variant: 'paper' },
 ]
 
 const STATS = [
@@ -100,7 +100,8 @@ export default function Intro() {
       <div className="gi-pin">
         <p className="g-label gi-label">( 01 — The studio )</p>
 
-        <h2 className="gi-statement">
+        <div className="gi-main">
+          <h2 className="gi-statement">
           <span className="gi-line">
             <span className="gi-line-in">
               Not your typical{' '}
@@ -160,6 +161,7 @@ export default function Intro() {
               <span className="gi-stat-label">{s.label}</span>
             </div>
           ))}
+          </div>
         </div>
       </div>
     </section>

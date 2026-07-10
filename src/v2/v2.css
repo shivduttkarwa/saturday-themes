@@ -432,7 +432,14 @@ body.v2 #smooth-content {
   flex-direction: column;
   justify-content: center;
   gap: 3rem;
-  padding: 6rem clamp(1.25rem, 5vw, 6rem) 4rem;
+  padding: 6rem clamp(1.25rem, 5vw, 6rem) 9rem;
+}
+
+.gi-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(2rem, 6vw, 7rem);
 }
 
 .gi-statement {
@@ -529,15 +536,20 @@ body.v2 #smooth-content {
   position: relative;
   z-index: 1;
   display: flex;
-  gap: clamp(2rem, 6vw, 6rem);
-  border-top: 1px solid var(--v2-line);
-  padding-top: 1.8rem;
+  flex-direction: column;
+  gap: 1.6rem;
+  flex: 0 0 auto;
 }
 
 .gi-stat {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  align-items: flex-end;
+  text-align: right;
+  min-width: 13rem;
+  border-top: 1px solid var(--v2-line);
+  padding-top: 1.1rem;
 }
 
 .gi-stat-value {
@@ -1086,13 +1098,28 @@ body.v2 #smooth-content {
     display: none;
   }
 
+  .gi-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2.5rem;
+  }
+
   .gi-statement {
     max-width: none;
   }
 
   .gi-stats {
+    flex-direction: row;
     flex-wrap: wrap;
     gap: 1.5rem 2.5rem;
+  }
+
+  .gi-stat {
+    align-items: flex-start;
+    text-align: left;
+    min-width: 0;
+    border-top: none;
+    padding-top: 0;
   }
 
   .g-services {
