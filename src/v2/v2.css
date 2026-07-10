@@ -445,9 +445,10 @@ body.v2 #smooth-content {
 .gi-statement {
   position: relative;
   z-index: 1;
+  flex: 0 1 auto;
   font-family: var(--f-display);
   font-weight: 700;
-  font-size: clamp(1.7rem, 4.6vw, 4.6rem);
+  font-size: clamp(1.7rem, 4.2vw, 4.4rem);
   line-height: 1.14;
   letter-spacing: -0.03em;
   max-width: 20ch;

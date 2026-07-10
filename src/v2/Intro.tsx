@@ -29,6 +29,22 @@ export default function Intro() {
       const circleLen = circle ? circle.getTotalLength() : 0
       if (circle) gsap.set(circle, { strokeDasharray: circleLen, strokeDashoffset: circleLen })
 
+      // ---- approach: label + statement reveal WHILE the section scrolls in,
+      // so there's never a blank screen before the pin engages
+      const enter = gsap.timeline({
+        scrollTrigger: { trigger: root.current, start: 'top 45%', once: true },
+      })
+      enter.from('.gi-label', { autoAlpha: 0, y: 26, duration: 0.7, ease: 'power3.out' }, 0)
+      gsap.utils.toArray<HTMLElement>('.gi-line').forEach((line, i) => {
+        enter.from(
+          line.querySelector('.gi-line-in'),
+          { yPercent: 115, duration: 0.9, ease: 'power4.out' },
+          0.1 + i * 0.14
+        )
+      })
+      enter.from('.gi-stat', { y: 56, autoAlpha: 0, stagger: 0.12, duration: 0.8, ease: 'power3.out' }, 0.35)
+
+      // ---- pinned: the annotations and the sticker rain play under the pin
       const tl = gsap.timeline({
         scrollTrigger: {
           trigger: root.current,
@@ -40,22 +56,30 @@ export default function Intro() {
         },
       })
 
-      tl.from('.gi-label', { autoAlpha: 0, y: 26, duration: 0.25 }, 0.05)
-
-      gsap.utils.toArray<HTMLElement>('.gi-line').forEach((line, i) => {
-        tl.from(
-          line.querySelector('.gi-line-in'),
-          { yPercent: 115, duration: 0.45, ease: 'power3.out' },
-          0.15 + i * 0.22
-        )
-      })
-
       // marker strikes through "agency"
-      tl.to('.gi-strike', { scaleX: 1, duration: 0.22, ease: 'power2.inOut' }, 0.85)
-      tl.to('.gi-struck', { color: '#a39d90', duration: 0.15 }, 0.95)
+      tl.to('.gi-strike', { scaleX: 1, duration: 0.25, ease: 'power2.inOut' }, 0.3)
+      tl.to('.gi-struck', { color: '#a39d90', duration: 0.18 }, 0.45)
 
       // hand-drawn circle around "handmade"
-      if (circle) tl.to(circle, { strokeDashoffset: 0, duration: 0.4, ease: 'power2.inOut' }, 1.05)
+      if (circle) tl.to(circle, { strokeDashoffset: 0, duration: 0.45, ease: 'power2.inOut' }, 0.65)
+
+      // counters run with the scroll
+      gsap.utils.toArray<HTMLElement>('.gi-num').forEach((el) => {
+        const target = Number(el.dataset.v)
+        const o = { v: 0 }
+        tl.to(
+          o,
+          {
+            v: target,
+            duration: 0.6,
+            ease: 'power1.out',
+            onUpdate: () => {
+              el.textContent = String(Math.round(o.v))
+            },
+          },
+          0.6
+        )
+      })
 
       // stickers tumble in from random directions and bounce-land in a pile
       gsap.utils.toArray<HTMLElement>('.gi-sticker').forEach((s, i) => {
@@ -71,26 +95,7 @@ export default function Intro() {
             duration: 1.0,
             ease: 'bounce.out',
           },
-          1.0 + i * 0.09
-        )
-      })
-
-      // stats rise and count with the scroll
-      tl.from('.gi-stat', { y: 56, autoAlpha: 0, stagger: 0.09, duration: 0.35 }, 1.75)
-      gsap.utils.toArray<HTMLElement>('.gi-num').forEach((el) => {
-        const target = Number(el.dataset.v)
-        const o = { v: 0 }
-        tl.to(
-          o,
-          {
-            v: target,
-            duration: 0.5,
-            ease: 'power1.out',
-            onUpdate: () => {
-              el.textContent = String(Math.round(o.v))
-            },
-          },
-          1.8
+          1.1 + i * 0.1
         )
       })
     },
