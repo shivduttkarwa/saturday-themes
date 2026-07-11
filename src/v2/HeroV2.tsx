@@ -64,25 +64,23 @@ export default function HeroV2({ ready }: { ready: boolean }) {
       slotVidEl.pause()
     }
 
-    let target = 0
+    // scrubbed directly — ScrollSmoother already smooths the scroll, and the
+    // shader needs the SAME progress the rects were measured at, or the
+    // corner peel drifts against the page
+    let p = 0
     const st = ScrollTrigger.create({
       trigger: reel.current!,
       start: 'top bottom',
       end: 'top top',
       onUpdate: (self) => {
-        target = self.progress
+        p = self.progress
       },
     })
 
-    const easePos = gsap.parseEase('power2.inOut')
-    let p = 0
     let landed = false
 
     const tick = (time: number) => {
       if (!wrap.current || !slot.current || !reel.current) return
-
-      p += (target - p) * 0.14
-      if (Math.abs(target - p) < 0.001) p = target
 
       // hand off to the static full-bleed panel once landed — hysteresis so
       // the swap can't flap at the boundary, no crossfade so it can't flicker
@@ -100,35 +98,23 @@ export default function HeroV2({ ready }: { ready: boolean }) {
 
       const sr = slot.current.getBoundingClientRect()
       const rr = reel.current.getBoundingClientRect()
-      const pe = easePos(p)
 
-      let w = sr.width + (rr.width - sr.width) * pe
-      let h = sr.height + (rr.height - sr.height) * pe
-      let x = sr.left + (rr.left - sr.left) * pe
-      let y = sr.top + (rr.top - sr.top) * pe
-
-      // entrance pop
+      // entrance pop + idle float only shape the FROM rect — the shader
+      // interpolates per-vertex from here to the full-bleed rect
       const s = intro.current.s
-      x += (w * (1 - s)) / 2
-      y += (h * (1 - s)) / 2
-      w *= s
-      h *= s
+      const fw = sr.width * s
+      const fh = sr.height * s
+      const fx = sr.left + (sr.width - fw) / 2
+      let fy = sr.top + (sr.height - fh) / 2
+      fy += Math.sin(time * 1.9) * fh * 0.05 * (1 - p)
 
-      // idle float while parked in the sentence
-      y += Math.sin(time * 1.9) * h * 0.05 * (1 - p)
-
-      // the cloth wave — silent at rest, wild mid-flight, fully settled
-      // before the handoff so the final frame matches the static panel
-      const arc = Math.sin(Math.PI * p)
-      const settle = Math.min(1, (1 - p) * 14)
-      const amp = (arc * Math.min(150, 30 + h * 0.28) + (1 - p) * 1.5) * settle
-
-      // banking: rolls into the flight, wobbles with the wind, levels out
-      const rot = arc * -0.22 + Math.sin(time * 1.4) * 0.03 * arc
-
-      const radius = (Math.min(w, h) / 2) * (1 - pe)
-
-      fly.draw({ x, y, w, h, amp, time, radius, rot })
+      fly.draw({
+        from: { x: fx, y: fy, w: fw, h: fh },
+        to: { x: rr.left, y: rr.top, w: rr.width, h: rr.height },
+        show: p,
+        r0: Math.min(fw, fh) / 2, // full pill while parked in the sentence
+        r1: 0, // lands flush into the edge-to-edge panel
+      })
     }
 
     gsap.ticker.add(tick)
