@@ -47,19 +47,25 @@ uniform sampler2D uTarget;
 uniform float uAspect;
 uniform vec2 uP0;         // stroke start (uv)
 uniform vec2 uP1;         // stroke end — the cursor (uv)
+uniform vec2 uDir;        // smoothed travel direction (aspect space, unit)
+uniform float uSquash;    // >1 squeezes the splat across the direction of travel
 uniform vec3 uColor;
 uniform float uRadius;
 uniform float uClamp01;
 varying vec2 vUv;
-float sdSegment(vec2 p, vec2 a, vec2 b) {
-  vec2 pa = p - a;
-  vec2 ba = b - a;
-  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
-  return length(pa - ba * h);
-}
 void main() {
   vec2 asp = vec2(uAspect, 1.0);
-  float d = sdSegment(vUv * asp, uP0 * asp, uP1 * asp);
+  vec2 pa = vUv * asp - uP0 * asp;
+  vec2 ba = (uP1 - uP0) * asp;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+  vec2 q = pa - ba * h;                       // offset from the stroke centreline
+
+  // anisotropic falloff: narrow across the stroke, long along it. an isotropic
+  // gaussian can only ever produce a bead — this is what makes it a ribbon.
+  vec2 perp = vec2(-uDir.y, uDir.x);
+  vec2 e = vec2(dot(q, uDir), dot(q, perp) * uSquash);
+  float d = length(e);
+
   vec3 splat = exp(-(d * d) / uRadius) * uColor;
   vec3 v = texture2D(uTarget, vUv).xyz + splat;
   gl_FragColor = vec4(mix(v, clamp(v, 0.0, 1.0), uClamp01), 1.0);
@@ -167,18 +173,18 @@ uniform vec2 uTexel;      // 1 / dye resolution
 uniform vec3 uPaper;      // page background color
 varying vec2 vUv;
 void main() {
-  // smooth the field first — surface tension in disguise. the blur rounds
-  // ragged advection edges so the threshold below cuts droplets, not wisps.
-  vec2 t = uTexel * 2.2;
-  float m = texture2D(uDye, vUv).r * 0.4;
-  m += texture2D(uDye, vUv + vec2(t.x, 0.0)).r * 0.15;
-  m += texture2D(uDye, vUv - vec2(t.x, 0.0)).r * 0.15;
-  m += texture2D(uDye, vUv + vec2(0.0, t.y)).r * 0.15;
-  m += texture2D(uDye, vUv - vec2(0.0, t.y)).r * 0.15;
+  // the lightest smoothing — just enough to keep the waterline from
+  // aliasing. any more and filaments melt back into one round mass.
+  vec2 t = uTexel * 1.1;
+  float m = texture2D(uDye, vUv).r * 0.52;
+  m += texture2D(uDye, vUv + vec2(t.x, 0.0)).r * 0.12;
+  m += texture2D(uDye, vUv - vec2(t.x, 0.0)).r * 0.12;
+  m += texture2D(uDye, vUv + vec2(0.0, t.y)).r * 0.12;
+  m += texture2D(uDye, vUv - vec2(0.0, t.y)).r * 0.12;
 
-  // the waterline: a tight cut through the smoothed field = rounded blobs
-  // with a defined edge — solid water inside, clean paper outside.
-  float a = smoothstep(0.34, 0.46, m);
+  // the waterline: cut close to the core so the edge tracks the fluid's
+  // real silhouette — torn, tapering, never a circle around the cursor
+  float a = smoothstep(0.44, 0.55, m);
 
   // meniscus shading from the field gradient
   float ml = texture2D(uDye, vUv - vec2(uTexel.x * 2.5, 0.0)).r;
@@ -188,7 +194,7 @@ void main() {
   float spec = clamp(-(mt - mb) * 2.4 - (mr - ml) * 1.0, 0.0, 1.0);
 
   // thin darker band hugging the waterline — the glassy rim of a real drop
-  float rim = a * (1.0 - smoothstep(0.46, 0.62, m));
+  float rim = a * (1.0 - smoothstep(0.55, 0.72, m));
 
   // paper-colored water + difference blending (CSS) inverts whatever sits
   // beneath: paper turns black, the dark headline turns light.
@@ -202,13 +208,14 @@ void main() {
    Elegance = restraint: laminar swirls (low curl), a calm settle (higher
    velocity dissipation) and a trail that clears within a couple of seconds. */
 const SIM_H = 128 // velocity / pressure grid height
-/* deliberately modest — linear filtering + the composite blur melt the
-   advected dye into rounded, surface-tension blobs instead of smoke wisps */
-const DYE_H = 320
+/* high enough that filaments and torn edges survive advection — at low res
+   everything melts into one round mass no matter how the splat is shaped */
+const DYE_H = 640
 const PRESSURE_ITERATIONS = 20
-const CURL_STRENGTH = 5 // barely-there eddies — water glides, smoke billows
+const CURL_STRENGTH = 14 // shears the ribbon into tendrils
 const VELOCITY_DISSIPATION = 0.32 // currents glide, then settle
 const DYE_DISSIPATION = 1.2 // the ink clears — the page stays clean
+const SPLAT_SQUASH = 2.4 // ribbon thinness across the stroke
 /* once the pointer rests, the water calms and clears much faster */
 const IDLE_DELAY = 0.12 // s of stillness before the fast fade kicks in
 const IDLE_VELOCITY_DISSIPATION = 1.6
@@ -410,6 +417,9 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
   // pointer state (uv, y up) — stroke segments queue up for the next step
   let last = { x: 0.5, y: 0.5 }
   let hasPointer = false
+  // smoothed travel direction — the instantaneous segment goes to zero on
+  // slow moves, and a splat with no direction is necessarily round
+  let dir = { x: 1, y: 0 }
   const splats: {
     x0: number
     y0: number
@@ -417,6 +427,9 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
     y1: number
     dx: number
     dy: number
+    dirx: number
+    diry: number
+    squash: number
     r: number
     s: number
   }[] = []
@@ -431,7 +444,16 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
     const dy = v - last.y
     const speed = Math.hypot(dx, dy)
     if (speed < 0.0004) return
-    if (splats.length < 12) {
+
+    // aspect-corrected, eased so the ribbon banks through turns
+    const aspect = Math.max(canvas.clientWidth / Math.max(canvas.clientHeight, 1), 0.5)
+    const nx = (dx * aspect) / speed
+    const ny = dy / speed
+    dir = { x: dir.x * 0.6 + nx * 0.4, y: dir.y * 0.6 + ny * 0.4 }
+    const dl = Math.hypot(dir.x, dir.y) || 1
+    dir = { x: dir.x / dl, y: dir.y / dl }
+
+    if (splats.length < 10) {
       splats.push({
         x0: last.x,
         y0: last.y,
@@ -439,11 +461,35 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
         y1: v,
         dx: dx * SPLAT_FORCE,
         dy: dy * SPLAT_FORCE,
-        // compact but concentrated — the field saturates fast, so the
-        // threshold sees a solid droplet, not a faint haze
-        r: 0.0016 + Math.min(0.002, speed * 0.018),
-        s: Math.min(1, 0.55 + speed * 20),
+        dirx: dir.x,
+        diry: dir.y,
+        // faster strokes draw out thinner — water stretches as it's pulled
+        squash: SPLAT_SQUASH + Math.min(1.4, speed * 22),
+        r: 0.00045 + Math.min(0.0009, speed * 0.008),
+        s: Math.min(1, 0.5 + speed * 20),
       })
+
+      // fast strokes shed beads off the trailing edge — separate droplets are
+      // what read as water rather than one continuous mass
+      if (speed > 0.006 && Math.random() < 0.5 && splats.length < 10) {
+        const side = Math.random() < 0.5 ? 1 : -1
+        const off = 0.01 + Math.random() * 0.03
+        const px = (-dir.y * side * off) / aspect
+        const py = dir.x * side * off
+        splats.push({
+          x0: u + px,
+          y0: v + py,
+          x1: u + px,
+          y1: v + py,
+          dx: 0,
+          dy: 0,
+          dirx: dir.x,
+          diry: dir.y,
+          squash: 1.15,
+          r: 0.00006 + Math.random() * 0.00012,
+          s: 0.75 + Math.random() * 0.25,
+        })
+      }
     }
     last = { x: u, y: v }
   }
@@ -473,6 +519,8 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
       gl.uniform1f(sp.u.uAspect!, simAspect)
       gl.uniform2f(sp.u.uP0!, s.x0, s.y0)
       gl.uniform2f(sp.u.uP1!, s.x1, s.y1)
+      gl.uniform2f(sp.u.uDir!, s.dirx, s.diry)
+      gl.uniform1f(sp.u.uSquash!, s.squash)
       gl.uniform1f(sp.u.uRadius!, s.r)
       gl.uniform1f(sp.u.uClamp01!, 0)
       gl.uniform1i(sp.u.uTarget!, bindTex(velocity.read.tex, 0))
