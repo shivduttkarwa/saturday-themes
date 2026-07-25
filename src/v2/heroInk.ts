@@ -1,11 +1,13 @@
 /*
- * Cursor ink-reveal for the V2 hero (noth.in-style).
- * A low-res ping-pong "trail" buffer accumulates cursor strokes (segment
- * splats so fast moves leave a continuous stroke), decays them each frame
- * and advects them with curl noise so the ink keeps swirling on its own.
- * The composite pass distorts the mask edge with fbm noise and reveals the
- * video inside a black ink rim, over a transparent canvas — the paper and
- * the DOM headline stay untouched above/below it.
+ * Cursor water-reveal for the V2 hero.
+ * A real-time GPU fluid simulation (stable fluids: semi-Lagrangian advection,
+ * Jacobi pressure solve, vorticity confinement). The cursor injects dye AND
+ * momentum, so every stroke becomes a current — it flows, curls into eddies,
+ * stretches into tendrils and keeps drifting after the pointer stops.
+ * The composite pass thresholds the dye into a glassy meniscus and reveals
+ * through CSS difference blending — paper turns black, the headline inverts.
+ * Requires WebGL2 + renderable half-float; returns null otherwise (the effect
+ * is decorative and both callers handle the fallback).
  */
 
 const QUAD_VERT = `
@@ -17,38 +19,38 @@ void main() {
 }
 `
 
-const NOISE = `
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+/* move any field through the velocity field (velocity itself, and the dye) */
+const ADVECT_FRAG = `
+precision highp float;
+uniform sampler2D uVelocity;
+uniform sampler2D uSource;
+uniform vec2 uTexel;       // 1 / sim resolution
+uniform float uDt;
+uniform float uDissipation;
+varying vec2 vUv;
+void main() {
+  vec2 coord = vUv - uDt * texture2D(uVelocity, vUv).xy * uTexel;
+  vec4 result = texture2D(uSource, coord);
+  gl_FragColor = result / (1.0 + uDissipation * uDt);
 }
 `
 
-const TRAIL_FRAG = `
+/* stroke splat — used for both momentum (velocity) and ink (dye).
+   A capsule along the last stroke segment, not a round dot: the injected
+   shape is already stretched in the direction of travel, so the fluid pulls
+   it into streaks and teardrops instead of pushing a ball around.
+   uClamp01 = 1 keeps the dye from over-saturating (repeated strokes would
+   otherwise pile up into blobs that linger long after the fade should end) */
+const SPLAT_FRAG = `
 precision highp float;
-uniform sampler2D uPrev;
-uniform vec2 uM0;        // stroke start (uv)
-uniform vec2 uM1;        // stroke end (uv)
-uniform float uStrength; // 0..1
-uniform float uRadius;   // uv-squared falloff
-uniform vec2 uDropPos;   // satellite droplet
-uniform vec2 uDropParams;// radius, strength
+uniform sampler2D uTarget;
 uniform float uAspect;
-uniform float uTime;
+uniform vec2 uP0;         // stroke start (uv)
+uniform vec2 uP1;         // stroke end — the cursor (uv)
+uniform vec3 uColor;
+uniform float uRadius;
+uniform float uClamp01;
 varying vec2 vUv;
-${NOISE}
-vec2 curl(vec2 p) {
-  float e = 0.04;
-  float n1 = noise(p + vec2(0.0, e));
-  float n2 = noise(p - vec2(0.0, e));
-  float n3 = noise(p + vec2(e, 0.0));
-  float n4 = noise(p - vec2(e, 0.0));
-  return vec2(n1 - n2, n4 - n3) / (2.0 * e);
-}
 float sdSegment(vec2 p, vec2 a, vec2 b) {
   vec2 pa = p - a;
   vec2 ba = b - a;
@@ -56,66 +58,163 @@ float sdSegment(vec2 p, vec2 a, vec2 b) {
   return length(pa - ba * h);
 }
 void main() {
-  // barely-there drift — drops quiver, they don't smear
-  vec2 flow = curl(vUv * 2.2 + uTime * 0.05) * 0.0008;
-  float prev = texture2D(uPrev, vUv - flow).r * 0.972;
-
   vec2 asp = vec2(uAspect, 1.0);
-  float d = sdSegment(vUv * asp, uM0 * asp, uM1 * asp);
-  float splat = exp(-(d * d) / uRadius) * uStrength;
+  float d = sdSegment(vUv * asp, uP0 * asp, uP1 * asp);
+  vec3 splat = exp(-(d * d) / uRadius) * uColor;
+  vec3 v = texture2D(uTarget, vUv).xyz + splat;
+  gl_FragColor = vec4(mix(v, clamp(v, 0.0, 1.0), uClamp01), 1.0);
+}
+`
 
-  // satellite droplet flicked off the stroke
-  vec2 dd = (vUv - uDropPos) * asp;
-  splat += exp(-dot(dd, dd) / uDropParams.x) * uDropParams.y;
+const CURL_FRAG = `
+precision highp float;
+uniform sampler2D uVelocity;
+uniform vec2 uTexel;
+varying vec2 vUv;
+void main() {
+  float L = texture2D(uVelocity, vUv - vec2(uTexel.x, 0.0)).y;
+  float R = texture2D(uVelocity, vUv + vec2(uTexel.x, 0.0)).y;
+  float B = texture2D(uVelocity, vUv - vec2(0.0, uTexel.y)).x;
+  float T = texture2D(uVelocity, vUv + vec2(0.0, uTexel.y)).x;
+  gl_FragColor = vec4(0.5 * (R - L - T + B), 0.0, 0.0, 1.0);
+}
+`
 
-  gl_FragColor = vec4(clamp(prev + splat, 0.0, 1.0), 0.0, 0.0, 1.0);
+/* vorticity confinement — feeds the small eddies that make it read as water */
+const VORTICITY_FRAG = `
+precision highp float;
+uniform sampler2D uVelocity;
+uniform sampler2D uCurl;
+uniform vec2 uTexel;
+uniform float uStrength;
+uniform float uDt;
+varying vec2 vUv;
+void main() {
+  float L = texture2D(uCurl, vUv - vec2(uTexel.x, 0.0)).x;
+  float R = texture2D(uCurl, vUv + vec2(uTexel.x, 0.0)).x;
+  float B = texture2D(uCurl, vUv - vec2(0.0, uTexel.y)).x;
+  float T = texture2D(uCurl, vUv + vec2(0.0, uTexel.y)).x;
+  float C = texture2D(uCurl, vUv).x;
+  vec2 force = 0.5 * vec2(abs(T) - abs(B), abs(R) - abs(L));
+  force /= length(force) + 0.0001;
+  force *= uStrength * C;
+  force.y *= -1.0;
+  vec2 velocity = texture2D(uVelocity, vUv).xy + force * uDt;
+  gl_FragColor = vec4(clamp(velocity, -1000.0, 1000.0), 0.0, 1.0);
+}
+`
+
+const DIVERGENCE_FRAG = `
+precision highp float;
+uniform sampler2D uVelocity;
+uniform vec2 uTexel;
+varying vec2 vUv;
+void main() {
+  float L = texture2D(uVelocity, vUv - vec2(uTexel.x, 0.0)).x;
+  float R = texture2D(uVelocity, vUv + vec2(uTexel.x, 0.0)).x;
+  float B = texture2D(uVelocity, vUv - vec2(0.0, uTexel.y)).y;
+  float T = texture2D(uVelocity, vUv + vec2(0.0, uTexel.y)).y;
+  gl_FragColor = vec4(0.5 * (R - L + T - B), 0.0, 0.0, 1.0);
+}
+`
+
+const CLEAR_FRAG = `
+precision highp float;
+uniform sampler2D uTexture;
+uniform float uValue;
+varying vec2 vUv;
+void main() {
+  gl_FragColor = uValue * texture2D(uTexture, vUv);
+}
+`
+
+const PRESSURE_FRAG = `
+precision highp float;
+uniform sampler2D uPressure;
+uniform sampler2D uDivergence;
+uniform vec2 uTexel;
+varying vec2 vUv;
+void main() {
+  float L = texture2D(uPressure, vUv - vec2(uTexel.x, 0.0)).x;
+  float R = texture2D(uPressure, vUv + vec2(uTexel.x, 0.0)).x;
+  float B = texture2D(uPressure, vUv - vec2(0.0, uTexel.y)).x;
+  float T = texture2D(uPressure, vUv + vec2(0.0, uTexel.y)).x;
+  float divergence = texture2D(uDivergence, vUv).x;
+  gl_FragColor = vec4((L + R + B + T - divergence) * 0.25, 0.0, 0.0, 1.0);
+}
+`
+
+const GRADIENT_FRAG = `
+precision highp float;
+uniform sampler2D uPressure;
+uniform sampler2D uVelocity;
+uniform vec2 uTexel;
+varying vec2 vUv;
+void main() {
+  float L = texture2D(uPressure, vUv - vec2(uTexel.x, 0.0)).x;
+  float R = texture2D(uPressure, vUv + vec2(uTexel.x, 0.0)).x;
+  float B = texture2D(uPressure, vUv - vec2(0.0, uTexel.y)).x;
+  float T = texture2D(uPressure, vUv + vec2(0.0, uTexel.y)).x;
+  vec2 velocity = texture2D(uVelocity, vUv).xy - vec2(R - L, T - B);
+  gl_FragColor = vec4(velocity, 0.0, 1.0);
 }
 `
 
 const COMPOSITE_FRAG = `
 precision highp float;
-uniform sampler2D uTrail;
-uniform vec2 uTexel;      // 1 / trail resolution
+uniform sampler2D uDye;
+uniform vec2 uTexel;      // 1 / dye resolution
 uniform vec3 uPaper;      // page background color
-uniform float uAspect;
-uniform float uTime;
 varying vec2 vUv;
-${NOISE}
-float fbm(vec2 p) {
-  float v = 0.0;
-  v += 0.5 * noise(p);
-  v += 0.25 * noise(p * 2.13 + 5.2);
-  v += 0.125 * noise(p * 4.27 + 9.7);
-  return v / 0.875;
-}
 void main() {
-  float m = texture2D(uTrail, vUv).r;
+  // smooth the field first — surface tension in disguise. the blur rounds
+  // ragged advection edges so the threshold below cuts droplets, not wisps.
+  vec2 t = uTexel * 2.2;
+  float m = texture2D(uDye, vUv).r * 0.4;
+  m += texture2D(uDye, vUv + vec2(t.x, 0.0)).r * 0.15;
+  m += texture2D(uDye, vUv - vec2(t.x, 0.0)).r * 0.15;
+  m += texture2D(uDye, vUv + vec2(0.0, t.y)).r * 0.15;
+  m += texture2D(uDye, vUv - vec2(0.0, t.y)).r * 0.15;
 
-  // surface normal of the water from the field gradient
-  float ml = texture2D(uTrail, vUv - vec2(uTexel.x * 1.5, 0.0)).r;
-  float mr = texture2D(uTrail, vUv + vec2(uTexel.x * 1.5, 0.0)).r;
-  float mb = texture2D(uTrail, vUv - vec2(0.0, uTexel.y * 1.5)).r;
-  float mt = texture2D(uTrail, vUv + vec2(0.0, uTexel.y * 1.5)).r;
-  vec2 nrm = vec2(mr - ml, mt - mb);
+  // the waterline: a tight cut through the smoothed field = rounded blobs
+  // with a defined edge — solid water inside, clean paper outside.
+  float a = smoothstep(0.34, 0.46, m);
 
-  // the merest imperfection — drops stay round, never mechanical
-  float n = fbm(vUv * vec2(uAspect, 1.0) * 2.2 + uTime * 0.05);
-  float mm = m + (n - 0.5) * 0.07;
+  // meniscus shading from the field gradient
+  float ml = texture2D(uDye, vUv - vec2(uTexel.x * 2.5, 0.0)).r;
+  float mr = texture2D(uDye, vUv + vec2(uTexel.x * 2.5, 0.0)).r;
+  float mb = texture2D(uDye, vUv - vec2(0.0, uTexel.y * 2.5)).r;
+  float mt = texture2D(uDye, vUv + vec2(0.0, uTexel.y * 2.5)).r;
+  float spec = clamp(-(mt - mb) * 2.4 - (mr - ml) * 1.0, 0.0, 1.0);
 
-  // crisp meniscus: tight threshold on a smooth field = metaball droplets
-  float a = smoothstep(0.40, 0.50, mm);
+  // thin darker band hugging the waterline — the glassy rim of a real drop
+  float rim = a * (1.0 - smoothstep(0.46, 0.62, m));
 
   // paper-colored water + difference blending (CSS) inverts whatever sits
   // beneath: paper turns black, the dark headline turns light.
-  // the glassy meniscus highlight reads as a soft rim inside the pool.
-  float spec = clamp(-nrm.y * 2.6 - nrm.x * 1.2, 0.0, 1.0);
-  vec3 col = uPaper * (1.0 - pow(spec, 2.0) * 0.22);
+  vec3 col = uPaper * (1.0 - rim * 0.16 - pow(spec, 2.0) * 0.14);
 
   gl_FragColor = vec4(col * a, a);
 }
 `
 
-const TRAIL_H = 384
+/* sim tuning — the "wateriness" lives in these numbers.
+   Elegance = restraint: laminar swirls (low curl), a calm settle (higher
+   velocity dissipation) and a trail that clears within a couple of seconds. */
+const SIM_H = 128 // velocity / pressure grid height
+/* deliberately modest — linear filtering + the composite blur melt the
+   advected dye into rounded, surface-tension blobs instead of smoke wisps */
+const DYE_H = 320
+const PRESSURE_ITERATIONS = 20
+const CURL_STRENGTH = 5 // barely-there eddies — water glides, smoke billows
+const VELOCITY_DISSIPATION = 0.32 // currents glide, then settle
+const DYE_DISSIPATION = 1.2 // the ink clears — the page stays clean
+/* once the pointer rests, the water calms and clears much faster */
+const IDLE_DELAY = 0.12 // s of stillness before the fast fade kicks in
+const IDLE_VELOCITY_DISSIPATION = 1.6
+const IDLE_DYE_DISSIPATION = 4.5
+const SPLAT_FORCE = 3600
+const PRESSURE_FADE = 0.82
 
 export interface HeroInk {
   /** feed a pointer position in element-space uv (y up) */
@@ -125,13 +224,30 @@ export interface HeroInk {
   destroy: () => void
 }
 
+interface FBO {
+  tex: WebGLTexture
+  fb: WebGLFramebuffer
+  w: number
+  h: number
+}
+
+interface DoubleFBO {
+  read: FBO
+  write: FBO
+  swap: () => void
+}
+
 export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
-  const gl = canvas.getContext('webgl', {
+  const gl = canvas.getContext('webgl2', {
     alpha: true,
     antialias: false,
     premultipliedAlpha: true,
-  })
+    depth: false,
+    stencil: false,
+  }) as WebGL2RenderingContext | null
   if (!gl) return null
+  // half-float render targets are the whole ballgame for a fluid sim
+  if (!gl.getExtension('EXT_color_buffer_float')) return null
 
   const compile = (type: number, src: string) => {
     const sh = gl.createShader(type)!
@@ -142,139 +258,304 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
     }
     return sh
   }
-  const link = (frag: string) => {
+
+  const vert = compile(gl.VERTEX_SHADER, QUAD_VERT)
+
+  interface Prog {
+    p: WebGLProgram
+    u: Record<string, WebGLUniformLocation | null>
+    aPos: number
+  }
+  const link = (frag: string): Prog | null => {
     const p = gl.createProgram()!
-    gl.attachShader(p, compile(gl.VERTEX_SHADER, QUAD_VERT))
+    gl.attachShader(p, vert)
     gl.attachShader(p, compile(gl.FRAGMENT_SHADER, frag))
     gl.linkProgram(p)
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
       console.warn('[heroInk] link error:', gl.getProgramInfoLog(p))
       return null
     }
-    return p
+    const u: Record<string, WebGLUniformLocation | null> = {}
+    const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS) as number
+    for (let i = 0; i < n; i++) {
+      const info = gl.getActiveUniform(p, i)
+      if (info) u[info.name] = gl.getUniformLocation(p, info.name)
+    }
+    return { p, u, aPos: gl.getAttribLocation(p, 'aPos') }
   }
 
-  const trailProg = link(TRAIL_FRAG)
+  const advectProg = link(ADVECT_FRAG)
+  const splatProg = link(SPLAT_FRAG)
+  const curlProg = link(CURL_FRAG)
+  const vorticityProg = link(VORTICITY_FRAG)
+  const divergenceProg = link(DIVERGENCE_FRAG)
+  const clearProg = link(CLEAR_FRAG)
+  const pressureProg = link(PRESSURE_FRAG)
+  const gradientProg = link(GRADIENT_FRAG)
   const compProg = link(COMPOSITE_FRAG)
-  if (!trailProg || !compProg) return null
+  const progs = [
+    advectProg,
+    splatProg,
+    curlProg,
+    vorticityProg,
+    divergenceProg,
+    clearProg,
+    pressureProg,
+    gradientProg,
+    compProg,
+  ]
+  if (progs.some((p) => !p)) return null
 
   // fullscreen quad
   const vbo = gl.createBuffer()
   gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW)
-  const bindQuad = (prog: WebGLProgram) => {
-    const loc = gl.getAttribLocation(prog, 'aPos')
-    gl.enableVertexAttribArray(loc)
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
-  }
 
-  const makeTex = (w: number, h: number) => {
-    const t = gl.createTexture()!
-    gl.bindTexture(gl.TEXTURE_2D, t)
+  const makeFBO = (w: number, h: number): FBO => {
+    const tex = gl.createTexture()!
+    gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
-    return t
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null)
+    const fb = gl.createFramebuffer()!
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 1)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+    return { tex, fb, w, h }
   }
 
-  // ping-pong trail buffers (low res is plenty — the mask is soft anyway)
-  let trailW = TRAIL_H
-  let trailH = TRAIL_H
-  const fbos: { tex: WebGLTexture; fb: WebGLFramebuffer }[] = []
-  const buildTrail = () => {
-    const aspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1)
-    trailW = Math.round(TRAIL_H * Math.max(aspect, 0.5))
-    trailH = TRAIL_H
-    for (const f of fbos.splice(0)) {
-      gl.deleteTexture(f.tex)
-      gl.deleteFramebuffer(f.fb)
-    }
-    for (let i = 0; i < 2; i++) {
-      const tex = makeTex(trailW, trailH)
-      const fb = gl.createFramebuffer()!
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
-      gl.clearColor(0, 0, 0, 1)
-      gl.clear(gl.COLOR_BUFFER_BIT)
-      fbos.push({ tex, fb })
-    }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  const makeDouble = (w: number, h: number): DoubleFBO => {
+    const pair = { read: makeFBO(w, h), write: makeFBO(w, h) }
+    return {
+      get read() {
+        return pair.read
+      },
+      get write() {
+        return pair.write
+      },
+      swap() {
+        const t = pair.read
+        pair.read = pair.write
+        pair.write = t
+      },
+    } as DoubleFBO
+  }
+
+  const releaseFBO = (f: FBO) => {
+    gl.deleteTexture(f.tex)
+    gl.deleteFramebuffer(f.fb)
+  }
+
+  // sim state
+  let simW = SIM_H
+  let simH = SIM_H
+  let dyeW = DYE_H
+  let dyeH = DYE_H
+  let velocity: DoubleFBO
+  let pressure: DoubleFBO
+  let dye: DoubleFBO
+  let divergence: FBO
+  let curl: FBO
+  let allFBOs: FBO[] = []
+
+  const buildSim = () => {
+    for (const f of allFBOs) releaseFBO(f)
+    allFBOs = []
+    const aspect = Math.max(canvas.clientWidth / Math.max(canvas.clientHeight, 1), 0.5)
+    simW = Math.round(SIM_H * aspect)
+    simH = SIM_H
+    dyeW = Math.round(DYE_H * aspect)
+    dyeH = DYE_H
+    velocity = makeDouble(simW, simH)
+    pressure = makeDouble(simW, simH)
+    dye = makeDouble(dyeW, dyeH)
+    divergence = makeFBO(simW, simH)
+    curl = makeFBO(simW, simH)
+    allFBOs = [velocity.read, velocity.write, pressure.read, pressure.write, dye.read, dye.write, divergence, curl]
   }
 
   const dpr = Math.min(window.devicePixelRatio || 1, 1.25)
   const resize = () => {
     canvas.width = Math.max(2, Math.round(canvas.clientWidth * dpr))
     canvas.height = Math.max(2, Math.round(canvas.clientHeight * dpr))
-    buildTrail()
+    buildSim()
   }
   resize()
 
-  // pointer state (uv, y up)
-  let m0 = { x: 0.5, y: 0.5 }
-  let m1 = { x: 0.5, y: 0.5 }
-  let strength = 0
-  let radius = 0.0004
+  const draw = (prog: Prog, target: FBO | null) => {
+    if (target) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb)
+      gl.viewport(0, 0, target.w, target.h)
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.viewport(0, 0, canvas.width, canvas.height)
+    }
+    gl.useProgram(prog.p)
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
+    gl.enableVertexAttribArray(prog.aPos)
+    gl.vertexAttribPointer(prog.aPos, 2, gl.FLOAT, false, 0, 0)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+  }
+
+  const bindTex = (tex: WebGLTexture, unit: number) => {
+    gl.activeTexture(gl.TEXTURE0 + unit)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    return unit
+  }
+
+  // pointer state (uv, y up) — stroke segments queue up for the next step
+  let last = { x: 0.5, y: 0.5 }
   let hasPointer = false
-  const drops: { x: number; y: number; r: number; s: number }[] = []
+  const splats: {
+    x0: number
+    y0: number
+    x1: number
+    y1: number
+    dx: number
+    dy: number
+    r: number
+    s: number
+  }[] = []
 
   const setMouse = (u: number, v: number, entered: boolean) => {
     if (!entered || !hasPointer) {
-      m0 = { x: u, y: v }
-      m1 = { x: u, y: v }
+      last = { x: u, y: v }
       hasPointer = entered
       return
     }
-    const speed = Math.hypot(u - m1.x, v - m1.y)
-    m1 = { x: u, y: v }
-    strength = Math.min(1, 0.55 + speed * 25)
-    radius = 0.001 + Math.min(0.004, speed * 0.04)
-
-    // fast strokes flick off small satellite droplets
-    if (speed > 0.008 && Math.random() < 0.3 && drops.length < 8) {
-      const ang = Math.random() * Math.PI * 2
-      const dist = 0.02 + Math.random() * 0.05
-      drops.push({
-        x: u + Math.cos(ang) * dist,
-        y: v + Math.sin(ang) * dist,
-        r: 0.00006 + Math.random() * 0.00025,
-        s: 0.5 + Math.random() * 0.5,
+    const dx = u - last.x
+    const dy = v - last.y
+    const speed = Math.hypot(dx, dy)
+    if (speed < 0.0004) return
+    if (splats.length < 12) {
+      splats.push({
+        x0: last.x,
+        y0: last.y,
+        x1: u,
+        y1: v,
+        dx: dx * SPLAT_FORCE,
+        dy: dy * SPLAT_FORCE,
+        // compact but concentrated — the field saturates fast, so the
+        // threshold sees a solid droplet, not a faint haze
+        r: 0.0016 + Math.min(0.002, speed * 0.018),
+        s: Math.min(1, 0.55 + speed * 20),
       })
     }
+    last = { x: u, y: v }
   }
 
-  let flip = 0
+  let lastTime: number | null = null
+  let idleT = 0
   const step = (time: number) => {
-    // --- trail update (ping-pong) ---
-    const src = fbos[flip]
-    const dst = fbos[1 - flip]
-    flip = 1 - flip
+    const dt = lastTime === null ? 1 / 60 : Math.min(Math.max(time - lastTime, 0), 1 / 30)
+    lastTime = time
+    const simAspect = simW / simH
+
+    // stillness detector — while the pointer rests, the fade accelerates
+    if (splats.length > 0) idleT = 0
+    else idleT += dt
+    const idle = Math.min(1, Math.max(0, (idleT - IDLE_DELAY) / 0.25))
+    const velDissipation =
+      VELOCITY_DISSIPATION + (IDLE_VELOCITY_DISSIPATION - VELOCITY_DISSIPATION) * idle
+    const dyeDissipation = DYE_DISSIPATION + (IDLE_DYE_DISSIPATION - DYE_DISSIPATION) * idle
 
     gl.disable(gl.BLEND)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb)
-    gl.viewport(0, 0, trailW, trailH)
-    gl.useProgram(trailProg)
-    bindQuad(trailProg)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, src.tex)
-    gl.uniform1i(gl.getUniformLocation(trailProg, 'uPrev'), 0)
-    gl.uniform2f(gl.getUniformLocation(trailProg, 'uM0'), m0.x, m0.y)
-    gl.uniform2f(gl.getUniformLocation(trailProg, 'uM1'), m1.x, m1.y)
-    gl.uniform1f(gl.getUniformLocation(trailProg, 'uStrength'), hasPointer ? strength : 0)
-    gl.uniform1f(gl.getUniformLocation(trailProg, 'uRadius'), radius)
-    gl.uniform1f(gl.getUniformLocation(trailProg, 'uAspect'), trailW / trailH)
-    gl.uniform1f(gl.getUniformLocation(trailProg, 'uTime'), time)
-    const drop = drops.shift()
-    gl.uniform2f(gl.getUniformLocation(trailProg, 'uDropPos'), drop?.x ?? 0, drop?.y ?? 0)
-    gl.uniform2f(gl.getUniformLocation(trailProg, 'uDropParams'), drop?.r ?? 1, drop?.s ?? 0)
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
-    // stroke consumed — next segment starts here; strength eases off
-    m0 = { ...m1 }
-    strength *= 0.8
+    /* --- inject the cursor strokes: momentum into velocity, ink into dye --- */
+    const a = advectProg!
+    const sp = splatProg!
+    for (const s of splats.splice(0)) {
+      gl.useProgram(sp.p)
+      gl.uniform1f(sp.u.uAspect!, simAspect)
+      gl.uniform2f(sp.u.uP0!, s.x0, s.y0)
+      gl.uniform2f(sp.u.uP1!, s.x1, s.y1)
+      gl.uniform1f(sp.u.uRadius!, s.r)
+      gl.uniform1f(sp.u.uClamp01!, 0)
+      gl.uniform1i(sp.u.uTarget!, bindTex(velocity.read.tex, 0))
+      gl.uniform3f(sp.u.uColor!, s.dx, s.dy, 0)
+      draw(sp, velocity.write)
+      velocity.swap()
 
-    // --- composite to screen ---
+      gl.useProgram(sp.p)
+      gl.uniform1f(sp.u.uClamp01!, 1)
+      gl.uniform1i(sp.u.uTarget!, bindTex(dye.read.tex, 0))
+      gl.uniform3f(sp.u.uColor!, s.s, 0, 0)
+      draw(sp, dye.write)
+      dye.swap()
+    }
+
+    /* --- vorticity confinement keeps the eddies alive --- */
+    const cu = curlProg!
+    gl.useProgram(cu.p)
+    gl.uniform2f(cu.u.uTexel!, 1 / simW, 1 / simH)
+    gl.uniform1i(cu.u.uVelocity!, bindTex(velocity.read.tex, 0))
+    draw(cu, curl)
+
+    const vo = vorticityProg!
+    gl.useProgram(vo.p)
+    gl.uniform2f(vo.u.uTexel!, 1 / simW, 1 / simH)
+    gl.uniform1f(vo.u.uStrength!, CURL_STRENGTH)
+    gl.uniform1f(vo.u.uDt!, dt)
+    gl.uniform1i(vo.u.uVelocity!, bindTex(velocity.read.tex, 0))
+    gl.uniform1i(vo.u.uCurl!, bindTex(curl.tex, 1))
+    draw(vo, velocity.write)
+    velocity.swap()
+
+    /* --- pressure projection: make the flow incompressible (watery) --- */
+    const dv = divergenceProg!
+    gl.useProgram(dv.p)
+    gl.uniform2f(dv.u.uTexel!, 1 / simW, 1 / simH)
+    gl.uniform1i(dv.u.uVelocity!, bindTex(velocity.read.tex, 0))
+    draw(dv, divergence)
+
+    const cl = clearProg!
+    gl.useProgram(cl.p)
+    gl.uniform1f(cl.u.uValue!, PRESSURE_FADE)
+    gl.uniform1i(cl.u.uTexture!, bindTex(pressure.read.tex, 0))
+    draw(cl, pressure.write)
+    pressure.swap()
+
+    const pr = pressureProg!
+    gl.useProgram(pr.p)
+    gl.uniform2f(pr.u.uTexel!, 1 / simW, 1 / simH)
+    for (let i = 0; i < PRESSURE_ITERATIONS; i++) {
+      gl.useProgram(pr.p)
+      gl.uniform1i(pr.u.uPressure!, bindTex(pressure.read.tex, 0))
+      gl.uniform1i(pr.u.uDivergence!, bindTex(divergence.tex, 1))
+      draw(pr, pressure.write)
+      pressure.swap()
+    }
+
+    const gr = gradientProg!
+    gl.useProgram(gr.p)
+    gl.uniform2f(gr.u.uTexel!, 1 / simW, 1 / simH)
+    gl.uniform1i(gr.u.uPressure!, bindTex(pressure.read.tex, 0))
+    gl.uniform1i(gr.u.uVelocity!, bindTex(velocity.read.tex, 1))
+    draw(gr, velocity.write)
+    velocity.swap()
+
+    /* --- advect: the field carries itself, then carries the ink --- */
+    gl.useProgram(a.p)
+    gl.uniform2f(a.u.uTexel!, 1 / simW, 1 / simH)
+    gl.uniform1f(a.u.uDt!, dt)
+    gl.uniform1f(a.u.uDissipation!, velDissipation)
+    gl.uniform1i(a.u.uVelocity!, bindTex(velocity.read.tex, 0))
+    gl.uniform1i(a.u.uSource!, bindTex(velocity.read.tex, 0))
+    draw(a, velocity.write)
+    velocity.swap()
+
+    gl.useProgram(a.p)
+    gl.uniform1f(a.u.uDissipation!, dyeDissipation)
+    gl.uniform1i(a.u.uVelocity!, bindTex(velocity.read.tex, 0))
+    gl.uniform1i(a.u.uSource!, bindTex(dye.read.tex, 1))
+    draw(a, dye.write)
+    dye.swap()
+
+    /* --- composite to screen --- */
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.clearColor(0, 0, 0, 0)
@@ -282,28 +563,18 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
-    gl.useProgram(compProg)
-    bindQuad(compProg)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, dst.tex)
-    gl.uniform1i(gl.getUniformLocation(compProg, 'uTrail'), 0)
-
-    const rectAspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1)
-    gl.uniform2f(gl.getUniformLocation(compProg, 'uTexel'), 1 / trailW, 1 / trailH)
-    gl.uniform3f(gl.getUniformLocation(compProg, 'uPaper'), 0.949, 0.937, 0.914)
-    gl.uniform1f(gl.getUniformLocation(compProg, 'uAspect'), rectAspect)
-    gl.uniform1f(gl.getUniformLocation(compProg, 'uTime'), time)
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    const cp = compProg!
+    gl.useProgram(cp.p)
+    gl.uniform1i(cp.u.uDye!, bindTex(dye.read.tex, 0))
+    gl.uniform2f(cp.u.uTexel!, 1 / dyeW, 1 / dyeH)
+    gl.uniform3f(cp.u.uPaper!, 0.949, 0.937, 0.914)
+    draw(cp, null)
   }
 
   const destroy = () => {
-    for (const f of fbos) {
-      gl.deleteTexture(f.tex)
-      gl.deleteFramebuffer(f.fb)
-    }
+    for (const f of allFBOs) releaseFBO(f)
     gl.deleteBuffer(vbo)
-    gl.deleteProgram(trailProg)
-    gl.deleteProgram(compProg)
+    for (const p of progs) if (p) gl.deleteProgram(p.p)
   }
 
   return { setMouse, step, resize, destroy }

@@ -61,144 +61,55 @@ body.v2 #smooth-content {
 }
 
 /* ============================================================
-   LOADER — colours hard-coded so the panel is opaque on the very
-   first paint, independent of the `body.v2` theme timing.
+   LOADER — the week ticks over to Saturday.
+   Colours hard-coded so the panel is opaque on the very first
+   paint, independent of the `body.v2` theme timing.
    ============================================================ */
 
-.ldr {
+.ld {
   position: fixed;
   inset: 0;
   z-index: 1000;
   background: #f2efe9;
   color: #0f0e0c;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  padding: clamp(1.4rem, 4vw, 2.8rem);
-  overflow: hidden;
-  will-change: transform;
-}
-
-.ldr-mask {
-  display: inline-block;
-  overflow: hidden;
-  vertical-align: bottom;
-  padding-bottom: 0.05em;
-  margin-bottom: -0.05em;
-}
-
-.ldr-rise {
-  display: inline-block;
-  will-change: transform;
-}
-
-/* --- head --- */
-.ldr-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  will-change: transform;
 }
 
-.ldr-brand {
-  font-family: var(--f-display, 'Bricolage Grotesque', sans-serif);
-  font-weight: 800;
-  font-size: clamp(0.95rem, 1.4vw, 1.15rem);
-  letter-spacing: -0.01em;
+.ld-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2rem;
+  text-align: center;
+  padding: 0 1.25rem;
+  will-change: transform, opacity;
 }
 
-.ldr-tag {
+.ld-count {
   font-family: var(--f-mono, 'IBM Plex Mono', monospace);
-  font-size: 0.68rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
   color: #58544b;
 }
 
-/* --- centre counter --- */
-.ldr-mid {
-  display: grid;
-  place-items: center;
-}
-
-.ldr-count {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.12em;
+.ld-day {
   font-family: var(--f-display, 'Bricolage Grotesque', sans-serif);
   font-weight: 800;
-  font-size: clamp(6rem, 26vw, 20rem);
+  font-size: clamp(3rem, 11vw, 9rem);
   line-height: 1;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
+  color: #0f0e0c;
 }
 
-/* rolling odometer — clipped 1em windows, one digit strip per column */
-.ldr-odo {
-  display: flex;
-}
-
-.ldr-col {
-  display: block;
-  width: 0.62em;
-  height: 1em;
-  overflow: hidden;
-  text-align: center;
-}
-
-.ldr-strip {
-  display: flex;
-  flex-direction: column;
-  will-change: transform;
-  font-variant-numeric: tabular-nums;
-}
-
-.ldr-strip span {
-  display: block;
-  height: 1em;
-  line-height: 1;
-}
-
-.ldr-count i {
-  font-style: normal;
-  font-size: clamp(1.1rem, 3vw, 2.4rem);
-  color: #2b24ff;
-  margin-top: 0.35em;
-  margin-left: 0.12em;
-}
-
-/* --- foot: hairline + labels --- */
-.ldr-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 1.15rem;
-}
-
-.ldr-bar {
-  position: relative;
-  height: 2px;
-  width: 100%;
-  background: rgba(15, 14, 12, 0.14);
-  overflow: hidden;
-}
-
-.ldr-bar-fill {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: #0f0e0c;
-  transform: scaleX(0);
-  transform-origin: left;
-  will-change: transform;
-}
-
-.ldr-foot-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1.5rem;
-  font-family: var(--f-mono, 'IBM Plex Mono', monospace);
-  font-size: 0.68rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+.ld-hint {
+  font-family: var(--f-serif, 'Instrument Serif', Georgia, serif);
+  font-style: italic;
+  font-size: 1.05rem;
   color: #58544b;
 }
 
