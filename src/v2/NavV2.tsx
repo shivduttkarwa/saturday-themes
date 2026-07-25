@@ -2,18 +2,19 @@ import { useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { ScrollSmoother } from 'gsap/ScrollSmoother'
+import { requestPage } from './router'
+import type { PageKey } from './router'
 
-gsap.registerPlugin(ScrollTrigger, ScrollSmoother)
+gsap.registerPlugin(ScrollTrigger)
 
-const LINKS = [
-  { label: 'Work', target: '#work' },
-  { label: 'Services', target: '#services' },
-  { label: 'Approach', target: '#approach' },
-  { label: 'Contact', target: '#contact' },
+const LINKS: { label: string; target: PageKey }[] = [
+  { label: 'Studio', target: 'about' },
+  { label: 'Work', target: 'work' },
+  { label: 'Services', target: 'services' },
+  { label: 'Contact', target: 'contact' },
 ]
 
-export default function NavV2({ ready }: { ready: boolean }) {
+export default function NavV2({ ready, page }: { ready: boolean; page: PageKey }) {
   const root = useRef<HTMLElement>(null)
 
   useGSAP(
@@ -37,22 +38,25 @@ export default function NavV2({ ready }: { ready: boolean }) {
     { scope: root, dependencies: [ready] }
   )
 
-  const go = (e: React.MouseEvent, target: string) => {
+  const go = (e: React.MouseEvent, target: PageKey) => {
     e.preventDefault()
-    const smoother = ScrollSmoother.get()
-    if (smoother) smoother.scrollTo(target, true, 'top top')
-    else document.querySelector(target)?.scrollIntoView({ behavior: 'smooth' })
+    requestPage(target)
   }
 
   return (
     <nav className="g-nav" ref={root}>
-      <a className="g-nav-logo" href="#top" onClick={(e) => go(e, '#top')}>
+      <a className="g-nav-logo" href="?p=home" onClick={(e) => go(e, 'home')}>
         Saturday®
       </a>
       <span className="g-nav-tag">Digital design house — websites worth the weekend</span>
       <div className="g-nav-links">
         {LINKS.map((l) => (
-          <a key={l.label} href={l.target} onClick={(e) => go(e, l.target)}>
+          <a
+            key={l.label}
+            href={`?p=${l.target}`}
+            className={page === l.target ? 'is-active' : ''}
+            onClick={(e) => go(e, l.target)}
+          >
             {l.label}
           </a>
         ))}

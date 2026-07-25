@@ -3,8 +3,18 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ScrollSmoother } from 'gsap/ScrollSmoother'
+import { requestPage } from './router'
+import type { PageKey } from './router'
 
 gsap.registerPlugin(ScrollTrigger, ScrollSmoother)
+
+const SITEMAP: { label: string; target: PageKey }[] = [
+  { label: 'Home', target: 'home' },
+  { label: 'Studio', target: 'about' },
+  { label: 'Work', target: 'work' },
+  { label: 'Services', target: 'services' },
+  { label: 'Contact', target: 'contact' },
+]
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -79,10 +89,19 @@ export default function FooterV2() {
         <div className="g-f-col">
           <h4>Sitemap</h4>
           <ul>
-            <li><a href="#work">Work</a></li>
-            <li><a href="#services">Services</a></li>
-            <li><a href="#approach">Approach</a></li>
-            <li><a href="#contact">Contact</a></li>
+            {SITEMAP.map((l) => (
+              <li key={l.target}>
+                <a
+                  href={`?p=${l.target}`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    requestPage(l.target)
+                  }}
+                >
+                  {l.label}
+                </a>
+              </li>
+            ))}
           </ul>
         </div>
         <div className="g-f-col">

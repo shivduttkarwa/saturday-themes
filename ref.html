@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Peel Image Scroll Slider</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=IBM+Plex+Mono:wght@500&family=Inter+Tight:wght@400;600&family=Instrument+Serif:ital@1&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --paper: #f2efe9;
+        --ink: #0f0e0c;
+        --muted: #5c574d;
+        --line: rgba(15, 14, 12, 0.18);
+        --blue: #2b24ff;
+        --white: #f8f4ed;
+        --display: "Bricolage Grotesque", system-ui, sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, monospace;
+        --serif: "Instrument Serif", Georgia, serif;
+        --body: "Inter Tight", system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: auto;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(rgba(15, 14, 12, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(15, 14, 12, 0.028) 1px, transparent 1px),
+          var(--paper);
+        background-size: 36px 36px;
+        color: var(--ink);
+        font-family: var(--body);
+        overflow-x: hidden;
+      }
+
+      img,
+      canvas {
+        display: block;
+      }
+
+      .topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 80;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.25rem 1.5rem;
+        color: var(--white);
+        mix-blend-mode: difference;
+        pointer-events: none;
+      }
+
+      .brand,
+      .label,
+      .counter,
+      .dot-label {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .brand {
+        font-family: var(--display);
+        font-size: 1rem;
+        font-weight: 800;
+      }
+
+      .peel-stage {
+        position: relative;
+        height: 520svh;
+      }
+
+      .sticky {
+        position: sticky;
+        top: 0;
+        height: 100svh;
+        overflow: clip;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 1.2rem;
+        padding: 5.2rem clamp(1rem, 4vw, 4rem) 1.3rem;
+      }
+
+      .stage-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1.5rem;
+        min-height: 4.3rem;
+      }
+
+      .title {
+        margin: 0;
+        max-width: 13ch;
+        font-family: var(--display);
+        font-size: 4.8rem;
+        font-weight: 800;
+        line-height: 0.94;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .title em {
+        font-family: var(--serif);
+        font-weight: 400;
+        text-transform: none;
+      }
+
+      .head-note {
+        max-width: 22rem;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.45;
+      }
+
+      .slider-wrap {
+        position: relative;
+        min-height: 0;
+        display: grid;
+        place-items: center;
+      }
+
+      .slide-frame {
+        position: relative;
+        width: min(1180px, 100%);
+        height: min(68svh, 720px);
+        min-height: 420px;
+        border: 1px solid rgba(15, 14, 12, 0.38);
+        border-radius: 8px;
+        overflow: clip;
+        background: #0b0b0a;
+        box-shadow: 0 18px 60px rgba(15, 14, 12, 0.22);
+        isolation: isolate;
+      }
+
+      .base-image,
+      .fallback-image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .base-image {
+        z-index: 1;
+      }
+
+      .fallback-image {
+        z-index: 2;
+        opacity: 0;
+        transform: translateY(110%) scale(0.72);
+        transform-origin: 50% 100%;
+        border-radius: 999px;
+        will-change: transform, opacity, border-radius, clip-path;
+      }
+
+      .frame-shade {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        background:
+          linear-gradient(to top, rgba(4, 4, 4, 0.66), transparent 46%),
+          linear-gradient(to bottom, rgba(4, 4, 4, 0.2), transparent 30%);
+        pointer-events: none;
+      }
+
+      .frame-copy {
+        position: absolute;
+        left: clamp(1rem, 3vw, 2.5rem);
+        right: clamp(1rem, 3vw, 2.5rem);
+        bottom: clamp(1rem, 3vw, 2.4rem);
+        z-index: 5;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1.5rem;
+        color: var(--white);
+      }
+
+      .slide-title {
+        margin: 0;
+        font-family: var(--display);
+        font-size: 4rem;
+        font-weight: 800;
+        line-height: 0.96;
+        letter-spacing: 0;
+        text-transform: uppercase;
+        text-shadow: 0 2px 24px rgba(0, 0, 0, 0.42);
+      }
+
+      .slide-kicker {
+        margin: 0 0 0.6rem;
+        color: rgba(248, 244, 237, 0.78);
+      }
+
+      .counter {
+        display: flex;
+        align-items: baseline;
+        gap: 0.25rem;
+        color: var(--white);
+      }
+
+      .counter strong {
+        font-family: var(--display);
+        font-size: 4.2rem;
+        line-height: 0.8;
+      }
+
+      .progress-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 1.5rem;
+      }
+
+      .progress-dots {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.5rem;
+      }
+
+      .dot {
+        height: 4px;
+        border-radius: 99px;
+        background: var(--line);
+        overflow: hidden;
+      }
+
+      .dot span {
+        display: block;
+        width: 100%;
+        height: 100%;
+        transform: scaleX(0);
+        transform-origin: left;
+        background: var(--ink);
+      }
+
+      .dot.is-current span {
+        background: var(--blue);
+      }
+
+      .dot-label {
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .pill-strip {
+        position: absolute;
+        top: clamp(1rem, 3vw, 2rem);
+        left: clamp(1rem, 3vw, 2rem);
+        z-index: 12;
+        display: flex;
+        gap: 0.2rem;
+        pointer-events: none;
+      }
+
+      .thumb-pill {
+        width: 4.8rem;
+        height: 2.35rem;
+        overflow: clip;
+        border: 1px solid rgba(248, 244, 237, 0.5);
+        border-radius: 999px;
+        background: var(--ink);
+        opacity: 0.82;
+      }
+
+      .thumb-pill img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .peel-canvas {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        opacity: 0;
+      }
+
+      .outro {
+        min-height: 72svh;
+        display: grid;
+        place-items: center;
+        padding: 5rem 1.25rem;
+        background: var(--ink);
+        color: var(--white);
+        text-align: center;
+      }
+
+      .outro p {
+        margin: 0;
+        max-width: 18ch;
+        font-family: var(--display);
+        font-size: 3.2rem;
+        font-weight: 800;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 900px) {
+        .topbar {
+          padding: 1rem;
+        }
+
+        .topbar .label:last-child {
+          display: none;
+        }
+
+        .sticky {
+          padding: 4.8rem 1rem 1rem;
+        }
+
+        .stage-head {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .title {
+          font-size: 3rem;
+        }
+
+        .head-note {
+          display: none;
+        }
+
+        .slide-frame {
+          height: 64svh;
+          min-height: 420px;
+        }
+
+        .frame-copy {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .slide-title {
+          font-size: 2.5rem;
+        }
+
+        .counter strong {
+          font-size: 3rem;
+        }
+
+        .thumb-pill {
+          width: 3.4rem;
+          height: 1.8rem;
+        }
+
+        .progress-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 540px) {
+        .title {
+          font-size: 2.45rem;
+        }
+
+        .slide-title {
+          font-size: 2rem;
+        }
+
+        .slide-frame {
+          min-height: 380px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar" aria-label="Page header">
+      <div class="brand">Saturday Themes</div>
+      <div class="label">Peel slider ref</div>
+      <div class="label">Scroll</div>
+    </header>
+
+    <main>
+      <section class="peel-stage" id="stage">
+        <div class="sticky">
+          <div class="stage-head">
+            <h1 class="title">Pill <em>peel</em> gallery</h1>
+            <p class="head-note">
+              Art-directed stills move through a single framed reel, each one landing like a
+              printed sheet in motion.
+            </p>
+          </div>
+
+          <div class="slider-wrap">
+            <div class="slide-frame" id="frame">
+              <img class="base-image" id="baseImage" alt="" crossorigin="anonymous" />
+              <img class="fallback-image" id="fallbackImage" alt="" crossorigin="anonymous" />
+              <div class="frame-shade" aria-hidden="true"></div>
+              <div class="frame-copy">
+                <div>
+                  <p class="slide-kicker label" id="slideKicker">Editorial system</p>
+                  <h2 class="slide-title" id="slideTitle">Ink gallery</h2>
+                </div>
+                <div class="counter" aria-label="Slide counter">
+                  <strong id="slideNumber">01</strong>
+                  <span>/ 05</span>
+                </div>
+              </div>
+              <div class="pill-strip" id="pillStrip" aria-hidden="true"></div>
+            </div>
+          </div>
+
+          <div class="progress-row">
+            <div class="progress-dots" id="progressDots" aria-hidden="true"></div>
+            <div class="dot-label">Image reel</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="outro">
+        <p>The peel lands clean.</p>
+      </section>
+    </main>
+
+    <canvas class="peel-canvas" id="peelCanvas" aria-hidden="true"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
+    <script>
+      const slides = [
+        {
+          title: "Ink gallery",
+          kicker: "Editorial system",
+          src: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2200&auto=format&fit=crop",
+        },
+        {
+          title: "Studio bloom",
+          kicker: "Brand motion",
+          src: "https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=2200&auto=format&fit=crop",
+        },
+        {
+          title: "Chrome field",
+          kicker: "Product story",
+          src: "https://images.unsplash.com/photo-1488972685288-c3fd157d7c7a?q=80&w=2200&auto=format&fit=crop",
+        },
+        {
+          title: "Soft signal",
+          kicker: "Campaign rhythm",
+          src: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=2200&auto=format&fit=crop",
+        },
+        {
+          title: "Blue hour",
+          kicker: "Immersive page",
+          src: "https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=2200&auto=format&fit=crop",
+        },
+      ];
+
+      const VERT = `
+attribute vec2 aPos;
+uniform vec4 uFrom;
+uniform vec4 uTo;
+uniform float uShow;
+uniform vec2 uViewport;
+varying vec2 vUv;
+varying vec2 vRectWH;
+void main() {
+  vec2 p = aPos;
+  float downBias = pow(1.0 - p.y, 1.35) * 0.42;
+  float cornerBias = (pow(p.x * p.x, 0.78) + pow(1.0 - p.y, 1.6)) * 0.35;
+  float pw = 1.0 - downBias - cornerBias;
+  float sr = smoothstep(pw * 0.42, 0.54 + pw * 0.42, uShow);
+
+  vec4 rect = mix(uFrom, uTo, sr);
+  rect.x += mix(rect.z, 0.0, cos(sr * 6.2831853) * 0.5 + 0.5) * 0.055;
+  rect.y += (1.0 - sr) * (1.0 - p.y) * 18.0;
+
+  vec2 sp = rect.xy + p * rect.zw;
+  float rot = (smoothstep(0.0, 1.0, sr) - sr) * -1.08;
+  vec2 ctr = rect.xy + rect.zw * 0.5;
+  vec2 rel = sp - ctr;
+  float s = sin(rot);
+  float c = cos(rot);
+  rel = mat2(c, -s, s, c) * rel;
+  sp = ctr + rel;
+
+  vec2 clip = (sp / uViewport) * 2.0 - 1.0;
+  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+  vUv = p;
+  vRectWH = rect.zw;
+}
+`;
+
+      const FRAG = `
+precision highp float;
+uniform sampler2D uTex;
+uniform float uImageAspect;
+uniform float uR0;
+uniform float uR1;
+uniform float uShow;
+varying vec2 vUv;
+varying vec2 vRectWH;
+void main() {
+  float planeAspect = vRectWH.x / max(vRectWH.y, 1.0);
+  vec2 s = planeAspect > uImageAspect
+    ? vec2(1.0, uImageAspect / planeAspect)
+    : vec2(planeAspect / uImageAspect, 1.0);
+  vec2 uv = (vUv - 0.5) * s + 0.5;
+  vec3 col = texture2D(uTex, uv).rgb;
+
+  vec2 p = vUv * vRectWH;
+  vec2 halfRes = vRectWH * 0.5;
+  float r = min(mix(uR0, uR1, uShow), min(halfRes.x, halfRes.y));
+  vec2 q = abs(p - halfRes) - (halfRes - vec2(r));
+  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+  float a = 1.0 - smoothstep(-1.0, 1.0, d);
+  gl_FragColor = vec4(col * a, a);
+}
+`;
+
+      const SEG_X = 128;
+      const SEG_Y = 80;
+
+      function createPeelMedia(canvas, slideData) {
+        const gl = canvas.getContext("webgl", {
+          alpha: true,
+          antialias: true,
+          premultipliedAlpha: true,
+        });
+        if (!gl) return null;
+
+        const compile = (type, source) => {
+          const shader = gl.createShader(type);
+          gl.shaderSource(shader, source);
+          gl.compileShader(shader);
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.warn("[peel] shader compile error:", gl.getShaderInfoLog(shader));
+            return null;
+          }
+          return shader;
+        };
+
+        const vert = compile(gl.VERTEX_SHADER, VERT);
+        const frag = compile(gl.FRAGMENT_SHADER, FRAG);
+        if (!vert || !frag) return null;
+
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vert);
+        gl.attachShader(prog, frag);
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          console.warn("[peel] program link error:", gl.getProgramInfoLog(prog));
+          return null;
+        }
+        gl.useProgram(prog);
+
+        const verts = [];
+        for (let iy = 0; iy <= SEG_Y; iy++) {
+          for (let ix = 0; ix <= SEG_X; ix++) verts.push(ix / SEG_X, iy / SEG_Y);
+        }
+
+        const idx = [];
+        for (let iy = 0; iy < SEG_Y; iy++) {
+          for (let ix = 0; ix < SEG_X; ix++) {
+            const a = iy * (SEG_X + 1) + ix;
+            const b = a + 1;
+            const c = a + SEG_X + 1;
+            const d = c + 1;
+            idx.push(a, c, b, b, c, d);
+          }
+        }
+
+        const vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+
+        const ibo = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+
+        const aPos = gl.getAttribLocation(prog, "aPos");
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+        const uniforms = {
+          uFrom: gl.getUniformLocation(prog, "uFrom"),
+          uTo: gl.getUniformLocation(prog, "uTo"),
+          uShow: gl.getUniformLocation(prog, "uShow"),
+          uViewport: gl.getUniformLocation(prog, "uViewport"),
+          uImageAspect: gl.getUniformLocation(prog, "uImageAspect"),
+          uR0: gl.getUniformLocation(prog, "uR0"),
+          uR1: gl.getUniformLocation(prog, "uR1"),
+        };
+
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        const textures = slideData.map((slide) => {
+          const record = { tex: gl.createTexture(), aspect: 16 / 9, ready: false };
+          gl.bindTexture(gl.TEXTURE_2D, record.tex);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+          const image = new Image();
+          image.crossOrigin = "anonymous";
+          image.onload = () => {
+            record.aspect = image.naturalWidth / Math.max(1, image.naturalHeight);
+            gl.bindTexture(gl.TEXTURE_2D, record.tex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            record.ready = true;
+          };
+          image.src = slide.src;
+          return record;
+        });
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        const resize = () => {
+          canvas.width = Math.round(window.innerWidth * dpr);
+          canvas.height = Math.round(window.innerHeight * dpr);
+          gl.viewport(0, 0, canvas.width, canvas.height);
+        };
+        resize();
+        window.addEventListener("resize", resize);
+
+        const clear = () => {
+          gl.clearColor(0, 0, 0, 0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+        };
+
+        const draw = ({ imageIndex, from, to, show, r0, r1 }) => {
+          const record = textures[imageIndex];
+          clear();
+          if (!record || !record.ready) return false;
+
+          gl.useProgram(prog);
+          gl.bindTexture(gl.TEXTURE_2D, record.tex);
+          gl.uniform4f(uniforms.uFrom, from.x, from.y, Math.max(1, from.w), Math.max(1, from.h));
+          gl.uniform4f(uniforms.uTo, to.x, to.y, Math.max(1, to.w), Math.max(1, to.h));
+          gl.uniform1f(uniforms.uShow, show);
+          gl.uniform2f(uniforms.uViewport, window.innerWidth, window.innerHeight);
+          gl.uniform1f(uniforms.uImageAspect, record.aspect);
+          gl.uniform1f(uniforms.uR0, Math.max(0, r0));
+          gl.uniform1f(uniforms.uR1, Math.max(0, r1));
+          gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
+          return true;
+        };
+
+        return {
+          draw,
+          clear,
+          destroy() {
+            window.removeEventListener("resize", resize);
+            textures.forEach((record) => gl.deleteTexture(record.tex));
+            gl.deleteBuffer(vbo);
+            gl.deleteBuffer(ibo);
+            gl.deleteProgram(prog);
+            gl.deleteShader(vert);
+            gl.deleteShader(frag);
+          },
+        };
+      }
+
+      const frame = document.getElementById("frame");
+      const canvas = document.getElementById("peelCanvas");
+      const baseImage = document.getElementById("baseImage");
+      const fallbackImage = document.getElementById("fallbackImage");
+      const title = document.getElementById("slideTitle");
+      const kicker = document.getElementById("slideKicker");
+      const number = document.getElementById("slideNumber");
+      const dots = document.getElementById("progressDots");
+      const pillStrip = document.getElementById("pillStrip");
+
+      baseImage.src = slides[0].src;
+      fallbackImage.src = slides[1].src;
+
+      slides.forEach((slide, index) => {
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        dot.innerHTML = "<span></span>";
+        dots.appendChild(dot);
+
+        const pill = document.createElement("span");
+        pill.className = "thumb-pill";
+        pill.innerHTML = `<img src="${slide.src}" alt="" crossorigin="anonymous" />`;
+        pillStrip.appendChild(pill);
+      });
+
+      const peel = createPeelMedia(canvas, slides);
+      let scrollProgress = 0;
+      let activeBase = 0;
+      let activeCaption = 0;
+
+      function clamp(v, min, max) {
+        return Math.min(max, Math.max(min, v));
+      }
+
+      function smooth(v) {
+        return v * v * (3 - 2 * v);
+      }
+
+      function setBase(index) {
+        if (activeBase === index) return;
+        activeBase = index;
+        baseImage.src = slides[index].src;
+      }
+
+      function setCaption(index) {
+        if (activeCaption === index) return;
+        activeCaption = index;
+        title.textContent = slides[index].title;
+        kicker.textContent = slides[index].kicker;
+        number.textContent = String(index + 1).padStart(2, "0");
+      }
+
+      function updateDots(raw) {
+        const dotEls = [...dots.children];
+        dotEls.forEach((dot, index) => {
+          const fill = dot.firstElementChild;
+          const amount = clamp(raw - index + 1, 0, 1);
+          dot.classList.toggle("is-current", index === Math.round(raw));
+          fill.style.transform = `scaleX(${amount})`;
+        });
+      }
+
+      function renderFallback(next, t, from) {
+        const eased = smooth(t);
+        fallbackImage.src = slides[next].src;
+        fallbackImage.style.opacity = t > 0.015 && t < 0.995 ? "1" : "0";
+        fallbackImage.style.transform = `translateY(${(1 - eased) * 112}%) scale(${0.72 + eased * 0.28}) rotate(${(1 - eased) * -5}deg)`;
+        fallbackImage.style.borderRadius = `${999 - eased * 991}px`;
+        fallbackImage.style.clipPath = `inset(${(1 - eased) * 22}% ${(1 - eased) * 20}% 0 round ${999 - eased * 991}px)`;
+        fallbackImage.style.transformOrigin = `${from.x}px 100%`;
+      }
+
+      function render() {
+        const last = slides.length - 1;
+        const raw = clamp(scrollProgress * last, 0, last);
+        let current = Math.floor(raw);
+        if (current >= last) current = last - 1;
+        const next = current + 1;
+        const t = clamp(raw - current, 0, 1);
+        const captionIndex = clamp(Math.round(raw), 0, last);
+
+        setBase(t > 0.992 ? next : current);
+        setCaption(captionIndex);
+        updateDots(raw);
+
+        if (t < 0.006 || t > 0.994) {
+          canvas.style.opacity = "0";
+          fallbackImage.style.opacity = "0";
+          peel && peel.clear();
+          return;
+        }
+
+        const rect = frame.getBoundingClientRect();
+        const from = {
+          x: rect.left + rect.width * 0.22,
+          y: Math.max(window.innerHeight + 36, rect.bottom + rect.height * 0.22),
+          w: rect.width * 0.56,
+          h: Math.max(96, rect.height * 0.22),
+        };
+        const to = {
+          x: rect.left,
+          y: rect.top,
+          w: rect.width,
+          h: rect.height,
+        };
+
+        if (peel) {
+          const drawn = peel.draw({
+            imageIndex: next,
+            from,
+            to,
+            show: t,
+            r0: Math.min(from.w, from.h) / 2,
+            r1: 8,
+          });
+          canvas.style.opacity = drawn ? "1" : "0";
+          fallbackImage.style.opacity = drawn ? "0" : fallbackImage.style.opacity;
+          if (!drawn) renderFallback(next, t, from);
+        } else {
+          renderFallback(next, t, from);
+        }
+      }
+
+      if (window.gsap && window.ScrollTrigger) {
+        gsap.registerPlugin(ScrollTrigger);
+        ScrollTrigger.create({
+          trigger: "#stage",
+          start: "top top",
+          end: "bottom bottom",
+          scrub: true,
+          onUpdate: (self) => {
+            scrollProgress = self.progress;
+          },
+        });
+
+        gsap.from(".title, .head-note", {
+          y: 36,
+          opacity: 0,
+          duration: 0.9,
+          stagger: 0.08,
+          ease: "power3.out",
+        });
+
+        gsap.from(".slide-frame", {
+          y: 48,
+          scale: 0.965,
+          opacity: 0,
+          duration: 1,
+          ease: "power3.out",
+          delay: 0.12,
+        });
+
+        gsap.to(".thumb-pill", {
+          yPercent: -10,
+          duration: 1.5,
+          yoyo: true,
+          repeat: -1,
+          ease: "sine.inOut",
+          stagger: 0.18,
+        });
+
+        gsap.ticker.add(render);
+      } else {
+        const onScroll = () => {
+          const stage = document.getElementById("stage");
+          const top = stage.offsetTop;
+          const distance = stage.offsetHeight - window.innerHeight;
+          scrollProgress = clamp((window.scrollY - top) / Math.max(1, distance), 0, 1);
+          render();
+        };
+        window.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("resize", onScroll);
+        onScroll();
+      }
+
+      render();
+    </script>
+  </body>
+</html>

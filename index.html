@@ -15,6 +15,19 @@
       rel="stylesheet"
     />
     <title>Saturday Themes® — Websites Worth the Weekend</title>
+    <script>
+      /* Set the theme class before first paint so the page never flashes the
+         wrong background. V2 (paper) is the default; ?v=1 opts into V1 (dark). */
+      document.documentElement.classList.add(
+        new URLSearchParams(location.search).get('v') === '1' ? 'v1' : 'v2'
+      )
+    </script>
+    <style>
+      html.v2,
+      html.v2 body {
+        background: #f2efe9;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

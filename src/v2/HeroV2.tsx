@@ -250,7 +250,7 @@ export default function HeroV2({ ready }: { ready: boolean }) {
   )
 
   return (
-    <div className="g-heroWrap" id="top" ref={wrap}>
+    <div className={`g-heroWrap${ready ? ' is-ready' : ''}`} id="top" ref={wrap}>
       <section className="g-hero" ref={hero}>
         <canvas className="g-heroFx" ref={inkCanvas} aria-hidden="true" />
         <div className="g-meta-row">
