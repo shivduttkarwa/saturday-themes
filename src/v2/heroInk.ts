@@ -465,7 +465,8 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
         diry: dir.y,
         // faster strokes draw out thinner — water stretches as it's pulled
         squash: SPLAT_SQUASH + Math.min(1.4, speed * 22),
-        r: 0.00045 + Math.min(0.0009, speed * 0.008),
+        // radius is squared distance — +20% in size is a 1.44× area factor
+        r: 0.00065 + Math.min(0.0013, speed * 0.0115),
         s: Math.min(1, 0.5 + speed * 20),
       })
 
@@ -486,7 +487,7 @@ export function createHeroInk(canvas: HTMLCanvasElement): HeroInk | null {
           dirx: dir.x,
           diry: dir.y,
           squash: 1.15,
-          r: 0.00006 + Math.random() * 0.00012,
+          r: 0.0000864 + Math.random() * 0.00017,
           s: 0.75 + Math.random() * 0.25,
         })
       }
