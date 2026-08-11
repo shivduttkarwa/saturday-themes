@@ -64,15 +64,23 @@ const FIELD: Plate[] = [
   { k: 'p', z: -7400, x: 24, y: 16, w: 18, ar: '1 / 1', ry: -7, img: '1438761681033-6461ffad8d80' },
 ]
 
-const ARRIVAL = U('1497366811353-6870744d04b2', 2400)
-
 const STATS = [
   { value: 120, suffix: '+', label: 'Projects shipped' },
   { value: 9, suffix: 'yrs', label: 'Of weekend craft' },
   { value: 0, suffix: '', label: 'Templates used' },
 ]
 
-const STACK = ['GSAP', 'React', 'Webflow', 'Shopify', 'Motion', '3D / WebGL']
+/* The stack drops out of the sky and settles into the cloud bank along the
+   bottom. `sink` is where a pill comes to rest as a fraction of the bank's
+   height, so it lands the same depth into the clouds on any screen. */
+const STACK = [
+  { label: '✦ GSAP®', variant: 'blue', left: '3%', sink: 0.38, rot: -8 },
+  { label: '⚡ React', variant: 'ink', left: '19%', sink: 0.3, rot: 6 },
+  { label: '✳ Webflow', variant: 'paper', left: '34%', sink: 0.42, rot: -5 },
+  { label: '● Shopify', variant: 'ink', left: '50%', sink: 0.31, rot: 9 },
+  { label: '✺ Motion', variant: 'blue', left: '64%', sink: 0.36, rot: -9 },
+  { label: '◍ 3D / WebGL', variant: 'paper', left: '77%', sink: 0.29, rot: 5 },
+]
 
 function Line({ n }: { n: 1 | 2 | 3 }): ReactNode {
   if (n === 1)
@@ -154,7 +162,8 @@ export default function Intro() {
         scrollTrigger: {
           trigger: scope,
           start: 'top top',
-          end: '+=320%',
+          // the flight itself still gets ~285% of it; the rest is the arrival
+          end: '+=400%',
           scrub: 0.8,
           pin: true,
           anticipatePin: 1,
@@ -206,14 +215,21 @@ export default function Intro() {
           arrivedAt[2] + 0.03
         )
 
-      // ---- arrival: it lands inside the studio while the last plates are
-      // still streaming past behind it
-      tl.to('.gi-arrive', { autoAlpha: 1, duration: 0.2, ease: 'power2.out' }, 0.78)
+      /* ---- ARRIVAL — the flight breaks out above the weather.
+         Night floods the paper, the bank rises into frame, and SATURDAY
+         comes up out of the clouds like a sun. */
+      tl.to('.gi-arrive', { autoAlpha: 1, duration: 0.1, ease: 'power2.out' }, 0.8)
+      tl.from('.gi-sky', { y: '26%', duration: 0.16, ease: 'power2.out' }, 0.84)
+      tl.from('.gi-glow', { autoAlpha: 0, scale: 0.7, duration: 0.16, ease: 'power2.out' }, 0.88)
       tl.from(
-        '.gi-hud > *',
-        { y: 34, autoAlpha: 0, duration: 0.1, stagger: 0.045, ease: 'power3.out' },
-        0.88
+        '.gi-card > *',
+        { y: 26, autoAlpha: 0, duration: 0.08, stagger: 0.035, ease: 'power3.out' },
+        0.9
       )
+
+      // it rises from behind the crests, so it starts fully swallowed
+      tl.from('.gi-sun', { y: '30vh', duration: 0.18, ease: 'power3.out' }, 0.95)
+
       gsap.utils.toArray<HTMLElement>('.gi-num').forEach((el) => {
         const target = Number(el.dataset.v)
         const o = { v: 0 }
@@ -221,18 +237,42 @@ export default function Intro() {
           o,
           {
             v: target,
-            duration: 0.09,
+            duration: 0.08,
             ease: 'power1.out',
             onUpdate: () => {
               el.textContent = String(Math.round(o.v))
             },
           },
-          0.9
+          0.96
         )
       })
 
+      /* ---- and the stack drops out of the sky. It falls under gravity
+         (power2.in) rather than bouncing — a bounce reads as hitting a floor,
+         and the whole point is that the clouds catch it: each pill sinks a
+         little past its resting place and floats back up.
+         Directions come from the index, never from a random: a scrubbed
+         timeline runs backwards as often as forwards, and a random start
+         would pick a new one on every re-render. */
+      gsap.utils.toArray<HTMLElement>('.gi-sticker').forEach((el, i) => {
+        const at = 1.06 + i * 0.024
+        tl.from(
+          el,
+          {
+            y: '-130vh',
+            x: `${(i % 2 ? 1 : -1) * (8 + i * 3)}vw`,
+            rotation: (i % 2 ? 1 : -1) * (120 + i * 35),
+            duration: 0.1,
+            ease: 'power2.in',
+          },
+          at
+        )
+        tl.to(el, { y: 12, duration: 0.025, ease: 'power2.out' }, at + 0.1)
+        tl.to(el, { y: 0, duration: 0.05, ease: 'power2.inOut' }, at + 0.125)
+      })
+
       // a held beat so the pin never releases on the last frame of motion
-      tl.to({}, { duration: 0.1 })
+      tl.to({}, { duration: 0.06 })
 
       // ---- the field breathes, off the scroll entirely
       gsap.to(space, {
@@ -273,18 +313,47 @@ export default function Intro() {
           <span className="g-label">Scroll to fly through ↓</span>
         </div>
 
+        {/* ---- ABOVE THE CLOUDS ----
+            The flight breaks through the weather and comes out on top of it.
+            SATURDAY rises out of the bank like a sun, the stack rains down
+            past it, and the clouds swallow whatever lands short. */}
         <div className="gi-arrive">
-          <img src={ARRIVAL} alt="Inside the Saturday Themes studio" loading="lazy" />
-          <div className="gi-scrim" aria-hidden="true" />
+          <div className="gi-glow" aria-hidden="true" />
 
-          <div className="gi-hud">
-            <span className="g-label">( 01 — The studio )</span>
+          <div className="gi-sky" aria-hidden="true">
+            <img src="/cloudes.png" alt="" />
+          </div>
 
-            <p className="gi-said">
-              Nine years of Saturdays. One rule: nothing that looks like a template.
-            </p>
+          <div className="gi-sunwrap" aria-hidden="true">
+            <span className="gi-sun">Saturday</span>
+          </div>
 
-            <div className="gi-foot">
+          <div className="gi-slaps" aria-hidden="true">
+            {STACK.map((s) => (
+              <span
+                className={`gi-sticker is-${s.variant}`}
+                key={s.label}
+                style={{
+                  left: s.left,
+                  bottom: `calc(var(--sky) * ${s.sink})`,
+                  rotate: `${s.rot}deg`,
+                }}
+              >
+                {s.label}
+              </span>
+            ))}
+          </div>
+
+          {/* the same clouds again, cropped to their crests and laid over the
+              word and the pills — that overlap is what sinks them into it */}
+          <div className="gi-sky is-front" aria-hidden="true">
+            <img src="/cloudes.png" alt="" />
+          </div>
+
+          <div className="gi-card">
+            <div className="gi-top">
+              <span className="g-label">( 01 — The studio )</span>
+
               <div className="gi-stats">
                 {STATS.map((s) => (
                   <div className="gi-stat" key={s.label}>
@@ -298,15 +367,11 @@ export default function Intro() {
                   </div>
                 ))}
               </div>
-
-              <div className="gi-stack">
-                {STACK.map((s) => (
-                  <span className="gi-chip" key={s}>
-                    {s}
-                  </span>
-                ))}
-              </div>
             </div>
+
+            <p className="gi-said">
+              Nine years of Saturdays. One rule: nothing that looks like a template.
+            </p>
           </div>
         </div>
       </div>

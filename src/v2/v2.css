@@ -637,90 +637,161 @@ body.v2 #smooth-content {
 
 /* ---------- where the flight arrives ---------- */
 
+/* Paper, not a dark scrim: the flight is ink on paper, so it should resolve
+   back onto the page rather than cut to a lightbox. The wash also covers the
+   tail of the field, which is still streaming past underneath. */
+/* Night, not paper. The flight is ink on a white page; breaking out above
+   the weather is the one place this section earns a hard tonal cut, and the
+   plate's own sky is pure black — matching it means no seam anywhere. */
 .gi-arrive {
+  /* the bank's height. The word's waterline and every pill's resting place
+     are fractions of it, so they sink the same amount on any screen. */
+  --sky: 76vh;
   position: absolute;
   inset: 0;
   z-index: 8;
   opacity: 0;
+  background: #000;
   pointer-events: none;
 }
 
-.gi-arrive img {
+/* ---------- the weather ---------- */
+
+.gi-sky {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  height: var(--sky);
+  pointer-events: none;
+  will-change: transform;
+  /* the plate's own black fades out at the top, so the bank has no edge —
+     it just thins into the night above it */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.45) 16%, #000 44%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.45) 16%, #000 44%);
+}
+
+/* the second copy, cropped to the crests and laid over the word and pills */
+.gi-sky.is-front {
+  z-index: 4;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 26%, transparent 47%);
+  mask-image: linear-gradient(to top, #000 0%, #000 26%, transparent 47%);
+}
+
+.gi-sky img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: 50% 100%;
 }
 
-.gi-scrim {
+/* the light the clouds are lit by, sitting behind them */
+.gi-glow {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(15, 14, 12, 0.84) 0%,
-    rgba(15, 14, 12, 0.32) 40%,
-    rgba(15, 14, 12, 0.92) 100%
+  left: 50%;
+  bottom: 4vh;
+  z-index: 1;
+  width: min(150vw, 1900px);
+  height: 74vh;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    ellipse at 50% 88%,
+    rgba(255, 208, 152, 0.34),
+    rgba(255, 190, 140, 0.1) 44%,
+    transparent 70%
   );
+  pointer-events: none;
 }
 
-.gi-hud {
+/* ---------- the word coming up out of it ---------- */
+
+.gi-sunwrap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--sky) * 0.27);
+  z-index: 3;
+  text-align: center;
+  pointer-events: none;
+}
+
+.gi-sun {
+  display: inline-block;
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: clamp(3.4rem, 17vw, 18rem);
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+  color: var(--paper);
+  will-change: transform;
+}
+
+/* ---------- the notes, up in the dark ---------- */
+
+.gi-card {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  padding: 7rem clamp(1.25rem, 5vw, 6rem) 3.2rem;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1.6rem, 4vh, 3rem);
+  padding: 5rem clamp(1.25rem, 5vw, 6rem);
   color: var(--paper);
 }
 
-.gi-hud > .g-label {
-  color: rgba(242, 239, 233, 0.6);
+.gi-top {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.5rem clamp(1.5rem, 4vw, 3rem);
+}
+
+.gi-top > .g-label {
+  color: rgba(242, 239, 233, 0.55);
+  padding-top: 0.9rem;
 }
 
 .gi-said {
-  align-self: center;
-  max-width: 20ch;
+  max-width: 24ch;
+  text-align: center;
   font-family: var(--f-serif);
   font-style: italic;
-  font-size: clamp(1.8rem, 4vw, 4rem);
-  line-height: 1.12;
-  text-shadow: 0 2px 30px rgba(15, 14, 12, 0.4);
-}
-
-.gi-foot {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: clamp(1.4rem, 4vw, 3.5rem);
+  font-size: clamp(1.55rem, 3.3vw, 3.2rem);
+  line-height: 1.16;
+  color: rgba(242, 239, 233, 0.9);
 }
 
 .gi-stats {
   display: flex;
-  gap: clamp(1.4rem, 4vw, 3.5rem);
+  flex-wrap: wrap;
+  gap: 1rem clamp(1.4rem, 3vw, 2.8rem);
 }
 
 .gi-stat {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 8.5rem;
-  border-top: 1px solid rgba(242, 239, 233, 0.28);
+  min-width: 7.5rem;
+  border-top: 1px solid rgba(242, 239, 233, 0.26);
   padding-top: 0.9rem;
 }
 
 .gi-stat-value {
   font-family: var(--f-display);
   font-weight: 800;
-  font-size: clamp(1.9rem, 3.6vw, 3.4rem);
+  font-size: clamp(1.7rem, 2.9vw, 2.7rem);
   line-height: 1;
   letter-spacing: -0.02em;
 }
 
 .gi-suffix {
-  /* Klein blue lifted for the dark frame — #2b24ff against a scrimmed photo
-     is barely brighter than the photo */
-  color: #6d66ff;
+  /* Klein blue lifted for the night — #2b24ff on black is nearly invisible */
+  color: #7d76ff;
 }
 
 .gi-stat-label {
@@ -728,27 +799,50 @@ body.v2 #smooth-content {
   font-size: 0.62rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(242, 239, 233, 0.55);
+  color: rgba(242, 239, 233, 0.5);
 }
 
-.gi-stack {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+/* ---------- the stack, dropped into the weather ---------- */
+
+.gi-slaps {
+  position: absolute;
+  inset: 0;
+  z-index: 3; /* between the two copies of the bank */
+  pointer-events: none;
 }
 
-.gi-chip {
-  display: block;
-  padding: 0.55rem 1.05rem;
-  border: 1px solid rgba(242, 239, 233, 0.32);
-  border-radius: 999px;
-  font-family: var(--f-mono);
-  font-size: 0.6rem;
-  font-weight: 500;
-  letter-spacing: 0.2em;
+.gi-sticker {
+  position: absolute;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: clamp(0.9rem, 1.35vw, 1.3rem);
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: rgba(242, 239, 233, 0.82);
   white-space: nowrap;
+  padding: 0.9rem 1.6rem;
+  border-radius: 999px;
+  box-shadow: 0 16px 36px rgba(15, 14, 12, 0.22);
+  will-change: transform;
+}
+
+.gi-sticker.is-ink {
+  background: var(--ink);
+  color: var(--paper);
+  border: 2px solid var(--paper);
+  outline: 1.5px solid var(--ink);
+}
+
+.gi-sticker.is-blue {
+  background: var(--v2-accent);
+  color: #fff;
+  border: 2px solid #fff;
+  outline: 1.5px solid var(--v2-accent);
+}
+
+.gi-sticker.is-paper {
+  background: var(--paper);
+  color: var(--ink);
+  border: 2px dashed var(--ink);
 }
 
 /* ============================================================
@@ -1413,28 +1507,47 @@ body.v2 #smooth-content {
     font-size: 10.5vw;
   }
 
-  .gi-hud {
-    padding: 6rem 1.25rem 2.4rem;
-  }
-
-  .gi-said {
-    max-width: none;
-  }
-
-  .gi-foot {
-    flex-direction: column;
+  /* the notes stack down the left rather than sitting either side */
+  .gi-card {
     align-items: flex-start;
+    padding: 4.5rem 1.25rem;
     gap: 1.6rem;
   }
 
-  .gi-stats {
-    flex-wrap: wrap;
-    gap: 1.2rem 2rem;
+  .gi-top {
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  .gi-top > .g-label {
+    padding-top: 0;
+  }
+
+  .gi-said {
+    max-width: 24ch;
+    text-align: left;
   }
 
   .gi-stat {
     min-width: 0;
-    flex: 1 1 7rem;
+    flex: 1 1 6.5rem;
+  }
+
+  .gi-sun {
+    font-size: 21vw;
+  }
+
+  /* six pills across a phone would be a solid wall, so half of them stay in
+     the sky; the rest keep falling into the bank as they do on desktop */
+  .gi-sticker {
+    font-size: 0.82rem;
+    padding: 0.65rem 1.1rem;
+    box-shadow: 0 10px 22px rgba(15, 14, 12, 0.2);
+  }
+
+  .gi-sticker:nth-of-type(2),
+  .gi-sticker:nth-of-type(5) {
+    display: none;
   }
 
   .g-services {
