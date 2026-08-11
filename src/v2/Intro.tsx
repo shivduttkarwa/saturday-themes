@@ -1,8 +1,9 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { createHeroInk } from './heroInk'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -35,6 +36,10 @@ const TRAVEL = 7900 // how far the camera flies, in px of depth
    as a fraction of the perspective, where it starts and finishes going. */
 const GONE_FROM = 0.42 * P
 const GONE_TO = 0.74 * P
+
+/* Where the flight ends and the night frame takes over, in timeline seconds.
+   The cursor shader is gated on this too, so the two can't drift apart. */
+const ARRIVE_AT = 0.8
 
 const U = (id: string, w = 900) =>
   `https://images.unsplash.com/photo-${id}?q=80&w=${w}&auto=format&fit=crop`
@@ -74,12 +79,12 @@ const STATS = [
    bottom. `sink` is where a pill comes to rest as a fraction of the bank's
    height, so it lands the same depth into the clouds on any screen. */
 const STACK = [
-  { label: '✦ GSAP®', variant: 'blue', left: '3%', sink: 0.38, rot: -8 },
-  { label: '⚡ React', variant: 'ink', left: '19%', sink: 0.3, rot: 6 },
-  { label: '✳ Webflow', variant: 'paper', left: '34%', sink: 0.42, rot: -5 },
-  { label: '● Shopify', variant: 'ink', left: '50%', sink: 0.31, rot: 9 },
-  { label: '✺ Motion', variant: 'blue', left: '64%', sink: 0.36, rot: -9 },
-  { label: '◍ 3D / WebGL', variant: 'paper', left: '77%', sink: 0.29, rot: 5 },
+  { label: '✦ GSAP®', variant: 'blue', left: '3%', sink: 0.28, rot: -8 },
+  { label: '⚡ React', variant: 'ink', left: '19%', sink: 0.2, rot: 6 },
+  { label: '✳ Webflow', variant: 'paper', left: '34%', sink: 0.31, rot: -5 },
+  { label: '● Shopify', variant: 'ink', left: '50%', sink: 0.21, rot: 9 },
+  { label: '✺ Motion', variant: 'blue', left: '64%', sink: 0.26, rot: -9 },
+  { label: '◍ 3D / WebGL', variant: 'paper', left: '77%', sink: 0.19, rot: 5 },
 ]
 
 function Line({ n }: { n: 1 | 2 | 3 }): ReactNode {
@@ -116,6 +121,57 @@ function Line({ n }: { n: 1 | 2 | 3 }): ReactNode {
 
 export default function Intro() {
   const root = useRef<HTMLElement>(null)
+  const flight = useRef<gsap.core.Timeline | null>(null)
+
+  /* ---- the hero's cursor water-reveal, held back until the night frame has
+     landed. Same fluid sim, same difference blend — and difference is what
+     supplies the white: against a black sky a white dye stroke resolves to
+     white, so the cursor opens a hole of daylight in the night. Everything it
+     crosses flips with it — the ink pills go white, the paper word and the
+     lit clouds go dark. No extra layer underneath; the blend IS the reveal. */
+  useEffect(() => {
+    const canvas = root.current?.querySelector<HTMLCanvasElement>('.gi-fx')
+    const frame = root.current?.querySelector<HTMLElement>('.gi-arrive')
+    const stage = root.current?.querySelector<HTMLElement>('.gi-stage')
+    if (!canvas || !frame || !stage) return
+
+    const ink = createHeroInk(canvas)
+    if (!ink) return // no WebGL2 — the effect is decorative, so just skip it
+
+    const landed = () => (flight.current?.time() ?? 0) >= ARRIVE_AT
+
+    const onMove = (e: MouseEvent) => {
+      if (!landed()) return
+      const r = frame.getBoundingClientRect()
+      ink.setMouse((e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height, true)
+    }
+    const onLeave = () => ink.setMouse(0.5, 0.5, false)
+
+    stage.addEventListener('mousemove', onMove)
+    stage.addEventListener('mouseleave', onLeave)
+
+    const ro = new ResizeObserver(() => ink.resize())
+    ro.observe(canvas)
+
+    const tick = (time: number) => {
+      // idle unless the frame has landed AND is on screen — this is a fluid
+      // sim, and the hero is already running one of its own
+      const r = stage.getBoundingClientRect()
+      const live = landed() && r.bottom > 0 && r.top < window.innerHeight
+      canvas.style.opacity = live ? '1' : '0'
+      if (!live) return
+      ink.step(time)
+    }
+    gsap.ticker.add(tick)
+
+    return () => {
+      gsap.ticker.remove(tick)
+      ro.disconnect()
+      stage.removeEventListener('mousemove', onMove)
+      stage.removeEventListener('mouseleave', onLeave)
+      ink.destroy()
+    }
+  }, [])
 
   useGSAP(
     () => {
@@ -170,6 +226,7 @@ export default function Intro() {
           invalidateOnRefresh: true,
         },
       })
+      flight.current = tl // the cursor shader reads its position to know when to wake
 
       tl.to(space, { z: TRAVEL, duration: 1, ease: 'none' }, 0)
       tl.to('.gi-rail', { autoAlpha: 0, duration: 0.05 }, 0.04)
@@ -218,7 +275,7 @@ export default function Intro() {
       /* ---- ARRIVAL — the flight breaks out above the weather.
          Night floods the paper, the bank rises into frame, and SATURDAY
          comes up out of the clouds like a sun. */
-      tl.to('.gi-arrive', { autoAlpha: 1, duration: 0.1, ease: 'power2.out' }, 0.8)
+      tl.to('.gi-arrive', { autoAlpha: 1, duration: 0.1, ease: 'power2.out' }, ARRIVE_AT)
       tl.from('.gi-sky', { y: '26%', duration: 0.16, ease: 'power2.out' }, 0.84)
       tl.from('.gi-glow', { autoAlpha: 0, scale: 0.7, duration: 0.16, ease: 'power2.out' }, 0.88)
       tl.from(
@@ -373,6 +430,11 @@ export default function Intro() {
               Nine years of Saturdays. One rule: nothing that looks like a template.
             </p>
           </div>
+
+          {/* inside the frame on purpose: .gi-arrive is its own stacking
+              context, so the blend resolves against the night sky and not
+              against the paper flight underneath it */}
+          <canvas className="gi-fx" aria-hidden="true" />
         </div>
       </div>
     </section>

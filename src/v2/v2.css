@@ -655,6 +655,22 @@ body.v2 #smooth-content {
   pointer-events: none;
 }
 
+/* The hero's water-reveal, over the whole night frame. Difference against a
+   black sky resolves a white dye stroke to white — that is where the daylight
+   comes from — and everything the stroke crosses inverts with it. Opacity is
+   driven from Intro.tsx so it only shows once the frame has landed. */
+.gi-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  transition: opacity 0.35s ease;
+}
+
 /* ---------- the weather ---------- */
 
 .gi-sky {
@@ -804,10 +820,14 @@ body.v2 #smooth-content {
 
 /* ---------- the stack, dropped into the weather ---------- */
 
+/* Above the front bank (4), not between the two copies. Sitting this low the
+   pills were inside the cloud's solid zone and simply vanished; the only way
+   to drop them further and keep them legible is to let them rest ON the bank.
+   The word is untouched and still rises out of it. */
 .gi-slaps {
   position: absolute;
   inset: 0;
-  z-index: 3; /* between the two copies of the bank */
+  z-index: 5;
   pointer-events: none;
 }
 
