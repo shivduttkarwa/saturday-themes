@@ -46,16 +46,16 @@ type Plate =
 /* x/y are vw/vh from centre, z is depth. Perspective does the composition:
    deep plates cluster at the vanishing point and swing wide as they come. */
 const FIELD: Plate[] = [
-  { k: 'p', z: -780, x: -36, y: -21, w: 27, ar: '4 / 5', ry: 9, img: '1497215728101-856f4ea42174' },
-  { k: 'p', z: -1050, x: 35, y: 18, w: 25, ar: '1 / 1', ry: -10, img: '1522542550221-31fd19575a2d' },
+  { k: 'p', z: -780, x: -47, y: -21, w: 27, ar: '4 / 5', ry: 9, img: '1497215728101-856f4ea42174' },
+  { k: 'p', z: -1050, x: 45, y: 18, w: 25, ar: '1 / 1', ry: -10, img: '1522542550221-31fd19575a2d' },
   { k: 'w', z: -1350, x: 0, y: -1, line: 1 },
   { k: 'p', z: -1900, x: -33, y: 23, w: 23, ar: '3 / 4', ry: 8, img: '1531403009284-440f080d1e12' },
   { k: 'p', z: -2320, x: 32, y: -22, w: 24, ar: '4 / 5', ry: -7, img: '1493723843671-1d655e66ac1c' },
-  { k: 'p', z: -2800, x: 4, y: 29, w: 21, ar: '1 / 1', ry: 5, img: '1506794778202-cad84cf45f1d' },
+  { k: 'p', z: -2800, x: 4, y: 45, w: 21, ar: '1 / 1', ry: 5, img: '1506794778202-cad84cf45f1d' },
   { k: 'w', z: -3300, x: 0, y: 1, line: 2 },
   { k: 'p', z: -3820, x: -30, y: -25, w: 23, ar: '4 / 5', ry: 10, img: '1552664730-d307ca884978' },
-  { k: 'p', z: -4260, x: 29, y: 21, w: 22, ar: '3 / 4', ry: -8, img: '1497366216548-37526070297c' },
-  { k: 'p', z: -4740, x: -5, y: -30, w: 20, ar: '4 / 5', ry: 6, img: '1494790108377-be9c29b29330' },
+  { k: 'p', z: -4260, x: 52, y: 21, w: 22, ar: '3 / 4', ry: -8, img: '1497366216548-37526070297c' },
+  { k: 'p', z: -4740, x: -5, y: -55, w: 20, ar: '4 / 5', ry: 6, img: '1494790108377-be9c29b29330' },
   { k: 'w', z: -5300, x: 0, y: 0, line: 3 },
   { k: 'p', z: -5740, x: 27, y: -19, w: 21, ar: '1 / 1', ry: -6, img: '1488646953014-85cb44e25828' },
   { k: 'p', z: -6160, x: -28, y: 20, w: 21, ar: '4 / 5', ry: 8, img: '1499951360447-b19be8fe80f5' },
@@ -63,17 +63,6 @@ const FIELD: Plate[] = [
   { k: 'p', z: -7060, x: -25, y: -23, w: 19, ar: '4 / 5', ry: 7, img: '1519389950473-47ba0277781c' },
   { k: 'p', z: -7400, x: 24, y: 16, w: 18, ar: '1 / 1', ry: -7, img: '1438761681033-6461ffad8d80' },
 ]
-
-/* DEBUG — stamps each photograph with its number and depth so they can be
-   called out by name. Flip to false (or say the word) to strip them. The
-   number is that photo's position among the `k: 'p'` entries in FIELD. */
-const DEBUG_TAGS = true
-
-const PHOTO_NO: Record<number, number> = {}
-let photoCount = 0
-FIELD.forEach((o, i) => {
-  if (o.k === 'p') PHOTO_NO[i] = ++photoCount
-})
 
 const ARRIVAL = U('1497366811353-6870744d04b2', 2400)
 
@@ -270,12 +259,6 @@ export default function Intro() {
                 style={{ width: `${o.w}vw`, aspectRatio: o.ar }}
               >
                 <img src={U(o.img)} alt="" loading="lazy" decoding="async" />
-                {DEBUG_TAGS && (
-                  <figcaption className="gi-tag">
-                    <b>{PHOTO_NO[i]}</b>
-                    <i>z {o.z}</i>
-                  </figcaption>
-                )}
               </figure>
             ) : (
               <div className="gi-wordplate" key={i}>
