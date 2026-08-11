@@ -17,15 +17,24 @@
     <title>Saturday Themes® — Websites Worth the Weekend</title>
     <script>
       /* Set the theme class before first paint so the page never flashes the
-         wrong background. V2 (paper) is the default; ?v=1 opts into V1 (dark). */
-      document.documentElement.classList.add(
-        new URLSearchParams(location.search).get('v') === '1' ? 'v1' : 'v2'
-      )
+         wrong background. V2 (paper) is the default; ?v=1 opts into V1 (dark).
+         `booting` marks the window where V2's ink loader owns the screen. */
+      var v1 = new URLSearchParams(location.search).get('v') === '1'
+      document.documentElement.classList.add(v1 ? 'v1' : 'v2')
+      if (!v1) document.documentElement.classList.add('booting')
     </script>
     <style>
       html.v2,
       html.v2 body {
         background: #f2efe9;
+      }
+
+      /* The V2 loader is ink, so the page has to be ink before React ever
+         mounts — otherwise a cold load flashes paper first. Dropped at the
+         loader handoff, while the slats still cover everything. */
+      html.v2.booting,
+      html.v2.booting body {
+        background: #0f0e0c;
       }
     </style>
   </head>
