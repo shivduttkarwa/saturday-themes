@@ -43,6 +43,7 @@ const ARRIVE_AT = 0.8
 
 const U = (id: string, w = 900) =>
   `https://images.unsplash.com/photo-${id}?q=80&w=${w}&auto=format&fit=crop`
+const CLOUDS_IMAGE = `${import.meta.env.BASE_URL}cloudes.png`
 
 type Plate =
   | { k: 'p'; z: number; x: number; y: number; w: number; ar: string; ry: number; img: string }
@@ -378,7 +379,7 @@ export default function Intro() {
           <div className="gi-glow" aria-hidden="true" />
 
           <div className="gi-sky" aria-hidden="true">
-            <img src="/cloudes.png" alt="" />
+            <img src={CLOUDS_IMAGE} alt="" />
           </div>
 
           <div className="gi-sunwrap" aria-hidden="true">
@@ -404,7 +405,7 @@ export default function Intro() {
           {/* the same clouds again, cropped to their crests and laid over the
               word and the pills — that overlap is what sinks them into it */}
           <div className="gi-sky is-front" aria-hidden="true">
-            <img src="/cloudes.png" alt="" />
+            <img src={CLOUDS_IMAGE} alt="" />
           </div>
 
           <div className="gi-card">

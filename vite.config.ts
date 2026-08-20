@@ -11,6 +11,9 @@ export default defineConfig(({ command }) => {
   if (command === 'serve') process.env.NODE_ENV = 'development'
 
   return {
+    // Relative URLs work both at /saturday-themes/ on GitHub Pages and when
+    // the production build is previewed locally or moved to a custom domain.
+    base: './',
     plugins: [react()],
   }
 })

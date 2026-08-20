@@ -15,7 +15,7 @@ const PILLS = [
   'https://images.unsplash.com/photo-1561070791-2526d30994b5?q=80&w=400&auto=format&fit=crop',
 ]
 
-const REEL_VIDEO = '/vids/pill_video.mp4'
+const REEL_VIDEO = `${import.meta.env.BASE_URL}vids/pill_video.mp4`
 
 /* masked word — slides up out of its own clip on entrance */
 function W({ children }: { children: ReactNode }) {
