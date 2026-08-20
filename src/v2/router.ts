@@ -1,7 +1,7 @@
 /*
  * Tiny query-param router for the V2 multi-page experience.
- * Pages live on `?p=` so the existing `?v=` version switch keeps working
- * and the site stays deployable as a static bundle (no rewrites needed).
+ * Pages live on `?p=` so the site stays deployable as a static bundle without
+ * server-side rewrite rules.
  */
 
 export type PageKey = 'home' | 'about' | 'services' | 'work' | 'contact'

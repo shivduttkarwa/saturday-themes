@@ -106,36 +106,6 @@ button {
   display: inline-block;
 }
 
-/* ---------- version switcher ---------- */
-
-.vswitch {
-  position: fixed;
-  bottom: 1.1rem;
-  right: 1.1rem;
-  z-index: 450;
-  display: flex;
-  gap: 0.15rem;
-  padding: 0.3rem;
-  border-radius: 100px;
-  background: rgba(12, 12, 11, 0.72);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
-}
-
-.vswitch a {
-  color: rgba(255, 255, 255, 0.5);
-  padding: 0.3rem 0.7rem;
-  border-radius: 100px;
-}
-
-.vswitch a.on {
-  color: #0d0c0a;
-  background: #ece5d8;
-}
-
 /* ============================================================
    GRAIN
    ============================================================ */
